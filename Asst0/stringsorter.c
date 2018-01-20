@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
          */
 
 	//Variable declarations.
-	char *string = null;
+	char *string = '\0';
 	int isChar = 0;
 	int notChar = 0;
 	int i = 0;
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
 	if(DEBUG){
 
 		printf("String: %s\n", string);
-		printf("String length: %d", len);
+		printf("String length: %d\n", len);
 	}
 
 	if(len == 0){
