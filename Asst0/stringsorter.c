@@ -18,7 +18,7 @@ Rushabh Jhaveri         rrj28
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-
+#include<math.h>
 #include "stringsorter.h"
 
 unsigned int DEBUG = 1; // NO DEBUG = 0 ; DEBUG = 1
@@ -33,20 +33,32 @@ int main(int argc, char *argv[]) {
          */
 
 	//Variable declarations.
+	char *string = null;
+	int isChar = 0;
+	int notChar = 0;
+	int i = 0;
+	int len = 0;
 
-
+	//Can we please modularize this into an arg_check function?
   	if(argc != 2)
 	{
-		fprintf(stderr, "%s\n", "ERROR: Invalid number of arguments");
+		fprintf(stderr, "%s\n", "ERROR: Invalid number of arguments.");
     		exit(0);
   	}
 
-  	char * string = argv[1];
-  	printf("String: %s\n", string);
+	string = argv[1];
+	len = strlen(string);
 
-  	int isChar = 0;
-  	int notChar = 0;
-  	int i;
+	if(DEBUG){
+
+		printf("String: %s\n", string);
+		printf("String length: %d", len);
+	}
+
+	if(len == 0){
+
+		fprintf(stderr, "%s\n", "ERROR: String empty.");
+	}
 
   	for(i = 0; i < strlen(string); i++)
   	{
