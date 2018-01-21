@@ -18,7 +18,7 @@ Rushabh Jhaveri         rrj28
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include<math.h>
+#include <math.h>
 #include "stringsorter.h"
 
 unsigned int DEBUG = 1; // NO DEBUG = 0 ; DEBUG = 1
@@ -60,6 +60,8 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "%s\n", "ERROR: String empty.");
 	}
 
+	//Can the character check be modularized?
+
   	for(i = 0; i < strlen(string); i++)
   	{
 		if((string[i] >= 'a' && string[i] <= 'z') || (string[i] >= 'A' && string[i] <= 'Z'))
@@ -72,7 +74,7 @@ int main(int argc, char *argv[]) {
     		}
   	}
 
-  	printf("isChar count: %d\n", isChar);
+	printf("isChar count: %d\n", isChar);
   	printf("notChar count: %d\n", notChar);
 
   	if(isChar == 0)
@@ -80,5 +82,39 @@ int main(int argc, char *argv[]) {
     		fprintf(stderr, "%s\n", "No alphabets");
     		exit(0);
   	}
+
+	/*
+	  					--------------- Logic---------------
+
+	  So we have one long string. We've determined which characters are alphabets, and which are non-alphabetic characters. 
+	  
+	  "thing stuff other stuff blarp"
+	  
+	  # of words = 5
+	  # of non-alphabetic characters = 4
+
+	  Hence [since we already have the # of non-alphabetic characters] : 
+
+	  total # of words = (# of non-alphabetical characters) + 1
+
+	  Now that we have the # of words, we have the [required] size of the array required to store the words, and can thus determine
+	  how much memory to allot to the array.
+
+	  Now, we must build each word.
+
+	  We traverse the string, and until we hit a non-alphabetic character, each character encountered is appended to "word" variable,
+	  thus building up each word. Once a non-alphabetic character is encountered, the word has been built, so we dump it in the array,
+	  and reset the word variable to "". Repeat this process until you reach the end of the string. At the end of the string, the end-
+	  of-string character ('\0') acts as the final stopping point. That is, the last word has been built when the end-of-string 
+	  character is encountered.
+
+	  At this point, the array has been populated with each word.
+
+	  [Sorting logic will come here.]
+
+	  					  ---------- End Logic ----------
+
+	 */
+
   	return 0;
 }
