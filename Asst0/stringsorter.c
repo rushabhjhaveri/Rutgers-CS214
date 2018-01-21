@@ -19,13 +19,37 @@ Rushabh Jhaveri         rrj28
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
+#include <ctype.h>
 #include "stringsorter.h"
 
 unsigned int DEBUG = 1; // NO DEBUG = 0 ; DEBUG = 1
 
 
-char** buildwords( /* Parameters TBA */){
-
+char** buildwords(char *words[], char *string, int len, int arraylen){
+	int i = 0;
+	int j = 0;
+	char *word = '\0';
+	char ch = '0';
+	for(i = 0; i < len; i++){
+		ch = string[i];
+		if(isalpha(ch)){
+			word = word + ch;
+		}
+		else{ //non-alphabetic character => word built
+			//dump word in array
+			if(DEBUG){
+				printf("Word: %s", word);
+			}
+			words[j] = word;
+			j++;
+		}
+	}
+	if(DEBUG){
+		for(j = 0; i < arraylen; i++){
+			printf("words[%d]: %s", j, words[j]);
+		}
+	}
+	return words;
 }
 
 int main(int argc, char *argv[]) {
@@ -44,7 +68,6 @@ int main(int argc, char *argv[]) {
 	int i = 0;
 	int len = 0;
 	int numwords = 0;
-	//char *words[];
 	int arraylen = 0;
 
 	//Can we please modularize this into an arg_check function?
@@ -128,7 +151,7 @@ int main(int argc, char *argv[]) {
 	arraylen = numwords;
 	char *words[] = malloc(arraylen*sizeof(char*));
 	words[arraylen] = '\0';
-	build_words();
+	build_words(words, string, len, arraylen);
 
   	return 0;
 }
