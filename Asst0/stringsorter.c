@@ -23,6 +23,11 @@ Rushabh Jhaveri         rrj28
 
 unsigned int DEBUG = 1; // NO DEBUG = 0 ; DEBUG = 1
 
+
+char** buildwords( /* Parameters TBA */){
+
+}
+
 int main(int argc, char *argv[]) {
 	/*
 	   types of error:
@@ -38,6 +43,9 @@ int main(int argc, char *argv[]) {
 	int notChar = 0;
 	int i = 0;
 	int len = 0;
+	int numwords = 0;
+	//char *words[];
+	int arraylen = 0;
 
 	//Can we please modularize this into an arg_check function?
   	if(argc != 2)
@@ -115,6 +123,12 @@ int main(int argc, char *argv[]) {
 	  					  ---------- End Logic ----------
 
 	 */
+
+	numwords = notChar + 1;
+	arraylen = numwords;
+	char *words[] = malloc(arraylen*sizeof(char*));
+	words[arraylen] = '\0';
+	build_words();
 
   	return 0;
 }
