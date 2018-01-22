@@ -73,9 +73,14 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 	int i = 0;
 	int j = 0;
 	int k = 0;
-	char word[len];
-	memset(word, '\0', sizeof(word));
-	word[len] = '\0';
+	size_t word_size = 5; //average word length
+	size_t sz_mem = word_size+1; //memory required
+	char *word = malloc(sz_mem * sizeof(*word)); //allocate memory for word
+	if(!word){ //validate memory created successfullu, or throw error
+		fprintf(stderr, "ERROR: Virtual memory exhausted allocating 'word'\n");
+		exit(0);
+	}
+	memset(word, '\0', sz_mem); //initialize memory to zero
 	char ch = '0';
 	char *storedword;
 
@@ -91,6 +96,17 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 		if(isalpha(ch)){
 			//append(word, ch);
 			word[k] = ch;
+			if(k == (strlen(word) - 3)){ //realloc - make word twice as big
+				void *temp = realloc(word, 2*sz_mem); //use a temporary pointer
+				if(!temp){ //check if realloc succeeded
+					fprintf(stderr, "ERROR: Virtual memory exhausted, realloc 'word' \n");
+					exit(0);
+				}
+
+				memset(temp + sz_mem, 0, sz_mem * sizeof(*word)); //zero new memory
+				word = temp; //assign new block to word
+				sz_mem += sz_mem; //update current allocation size
+			}
 			if(DEBUG){
 				printf("1.Word: %s\n", word);
 			}
@@ -110,7 +126,7 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 			if(DEBUG){
 				printf("wordsarr[%d]: %s\n", j, wordsarr[j]);
 			}
-			memset(word, '\0', sizeof(word)) ;
+			memset(word, '\0', sizeof(*word)) ;
 			//word[0] = '\0';
 			k = 0;
 			j++;
