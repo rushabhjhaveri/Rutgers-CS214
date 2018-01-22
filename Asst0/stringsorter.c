@@ -66,7 +66,7 @@ char *trimwhitespace(char *str)
 		      return str;
 }
 
-char** build_words(char *words[], char *string, int len, int arraylen){
+char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 	if(DEBUG){
 		printf("Entered build_words \n");
 	}
@@ -103,12 +103,12 @@ char** build_words(char *words[], char *string, int len, int arraylen){
 			}
 			storedword = (char*) malloc(strlen(word)+1);
 			strcpy(storedword, word);
-			words[j] = storedword;
+			wordsarr[j] = storedword;
 		/*	if(i == (len-1)){
-				words[j] = word;
+				wordsarr[j] = word;
 			}*/
 			if(DEBUG){
-				printf("words[%d]: %s\n", j, words[j]);
+				printf("wordsarr[%d]: %s\n", j, wordsarr[j]);
 			}
 			memset(word, '\0', sizeof(word)) ;
 			//word[0] = '\0';
@@ -120,18 +120,18 @@ char** build_words(char *words[], char *string, int len, int arraylen){
 	if(isalpha(ch)){
 		storedword = (char*) malloc(strlen(word)+1);
 		strcpy(storedword, word);
-		words[j] = storedword;
+		wordsarr[j] = storedword;
 		if(DEBUG){
-			printf("words[%d]: %s\n", j, words[j]);
+			printf("wordsarr[%d]: %s\n", j, wordsarr[j]);
 		}
 	}
 
 	if(DEBUG){
 		for(j = 0; j < arraylen; j++){
-			printf("words[%d]: %s\n", j, words[j]);
+			printf("wordsarr[%d]: %s\n", j, wordsarr[j]);
 		}
 	}
-	return words;
+	return wordsarr;
 }
 
 int main(int argc, char *argv[]) {
@@ -241,12 +241,12 @@ int main(int argc, char *argv[]) {
 
 	numwords = notChar + 1;
 	arraylen = numwords;
-	char *words[arraylen];
-	words[arraylen] = '\0';
+	char *wordsarr[arraylen];
+	wordsarr[arraylen] = '\0';
 	if(DEBUG){
 		printf("Array created.\n");
 	}
-	build_words(words, string, len, arraylen);
+	build_words(wordsarr, string, len, arraylen);
 
   	return 0;
 }
