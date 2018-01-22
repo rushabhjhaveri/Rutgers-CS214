@@ -24,29 +24,90 @@ Rushabh Jhaveri         rrj28
 
 unsigned int DEBUG = 1; // NO DEBUG = 0 ; DEBUG = 1
 
+char *trimwhitespace(char *str)
+{
+	  char *end;
 
-char** buildwords(char *words[], char *string, int len, int arraylen){
+	    // Trim leading space
+	    while(isspace((unsigned char)*str)) str++;
+
+	      if(*str == 0)  // All spaces?
+		          return str;
+
+	        // Trim trailing space
+	        end = str + strlen(str) - 1;
+		  while(end > str && isspace((unsigned char)*end)) end--;
+
+		    // Write new null terminator
+		    *(end+1) ='\0';
+
+		      return str;
+}
+
+char** build_words(char *words[], char *string, int len, int arraylen){
+	if(DEBUG){
+		printf("Entered build_words \n");
+	}
 	int i = 0;
 	int j = 0;
-	char *word = '\0';
+	int k = 0;
+	char word[len];
+	memset(word, '\0', sizeof(word));
 	char ch = '0';
+	char *storedword;
+
+	if(DEBUG){
+		printf("arraylen: %d\n", arraylen);
+	}
+
 	for(i = 0; i < len; i++){
 		ch = string[i];
+		if(DEBUG){
+			printf("ch: %c\n", ch);
+		}
 		if(isalpha(ch)){
-			word = word + ch;
+			//append(word, ch);
+			word[k] = ch;
+			if(DEBUG){
+				printf("Word: %s\n", word);
+			}
+			k++;
 		}
 		else{ //non-alphabetic character => word built
 			//dump word in array
 			if(DEBUG){
-				printf("Word: %s", word);
+				printf("Word: %s\n", word);
 			}
-			words[j] = word;
+			storedword = (char*) malloc(strlen(word)+1);
+		//	memset(storedword, '\0', sizeof(storedword));
+			strcpy(storedword, word);
+			words[j] = storedword;
+		/*	if(i == (len-1)){
+				words[j] = word;
+			}*/
+			if(DEBUG){
+				printf("words[%d]: %s\n", j, words[j]);
+			}
+			memset(word, '\0', sizeof(word)) ;
+			//word[0] = '\0';
+			k = 0;
 			j++;
 		}
+	} // end for
+
+	if(isalpha(ch)){
+		storedword = (char*) malloc(strlen(word)+1);
+	//	memset(storedword, '\0', sizeof(storedword));
+		strcpy(storedword, word);
+		words[j] = storedword;
+		if(DEBUG){
+			printf("word[%d]: %s\n", j, words[j]);
+		}
 	}
+
 	if(DEBUG){
-		for(j = 0; i < arraylen; i++){
-			printf("words[%d]: %s", j, words[j]);
+		for(j = 0; j < arraylen; j++){
+			printf("words[%d]: %s\n", j, words[j]);
 		}
 	}
 	return words;
@@ -78,7 +139,6 @@ int main(int argc, char *argv[]) {
   	}
 
 	string = argv[1];
-	len = strlen(string);
 
 	if(DEBUG){
 
@@ -86,9 +146,16 @@ int main(int argc, char *argv[]) {
 		printf("String length: %d\n", len);
 	}
 
+
+	string = trimwhitespace(string);
+	len = strlen(string);
 	if(len == 0){
 
 		fprintf(stderr, "%s\n", "ERROR: String empty.");
+		exit(0);
+	}
+	if(DEBUG){
+		printf("string: \"%s\"\n", string);
 	}
 
 	//Can the character check be modularized?
@@ -149,8 +216,11 @@ int main(int argc, char *argv[]) {
 
 	numwords = notChar + 1;
 	arraylen = numwords;
-	char *words[] = malloc(arraylen*sizeof(char*));
+	char *words[arraylen];
 	words[arraylen] = '\0';
+	if(DEBUG){
+		printf("Array created.\n");
+	}
 	build_words(words, string, len, arraylen);
 
   	return 0;
