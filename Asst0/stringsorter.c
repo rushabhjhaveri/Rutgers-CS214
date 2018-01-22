@@ -26,14 +26,31 @@ unsigned int DEBUG = 1; // NO DEBUG = 0 ; DEBUG = 1
 
 char *trimwhitespace(char *str)
 {
+	if(DEBUG){
+		printf("string entering trim: %s\n", str);
+	}
+
 	  char *end;
 
 	    // Trim leading space
-	    //while(isspace((unsigned char)*str)) str++;
-	    while(!isalpha((unsigned char)*str)) str++;
+//	    while(!isalpha((unsigned char)*str)) str++;
 
-	      if(*str == 0)  // All spaces?
+	    while((!isalpha((unsigned char)*str)) &&  strlen(str) != 0) {
+		    if(DEBUG){
+			    printf("Str in first  while is : %s", str);
+		    }
+		    str++;
+
+	    }
+	    
+
+	      if(*str == 0){  // All spaces?
+		      if(DEBUG){
+			      printf("Returning null char \n");
+		      }
+		         // return '\0';
 		          return str;
+	      }
 
 	        // Trim trailing space
 	        end = str + strlen(str) - 1;
@@ -41,7 +58,10 @@ char *trimwhitespace(char *str)
 		  while(end > str && (!isalpha((unsigned char)*end))) end--;
 
 		    // Write new null terminator
-		    *(end+1) ='\0';
+		    *(end+1) = '\0';
+		    if(DEBUG){
+			    printf("string leaving trim: \"%s\" : %d\n", str, (int) strlen(str));
+		    }
 
 		      return str;
 }
@@ -55,6 +75,7 @@ char** build_words(char *words[], char *string, int len, int arraylen){
 	int k = 0;
 	char word[len];
 	memset(word, '\0', sizeof(word));
+	word[len] = '\0';
 	char ch = '0';
 	char *storedword;
 
@@ -71,17 +92,16 @@ char** build_words(char *words[], char *string, int len, int arraylen){
 			//append(word, ch);
 			word[k] = ch;
 			if(DEBUG){
-				printf("Word: %s\n", word);
+				printf("1.Word: %s\n", word);
 			}
 			k++;
 		}
 		else{ //non-alphabetic character => word built
 			//dump word in array
 			if(DEBUG){
-				printf("Word: %s\n", word);
+				printf("2.Word: %s\n", word);
 			}
 			storedword = (char*) malloc(strlen(word)+1);
-		//	memset(storedword, '\0', sizeof(storedword));
 			strcpy(storedword, word);
 			words[j] = storedword;
 		/*	if(i == (len-1)){
@@ -99,11 +119,10 @@ char** build_words(char *words[], char *string, int len, int arraylen){
 
 	if(isalpha(ch)){
 		storedword = (char*) malloc(strlen(word)+1);
-	//	memset(storedword, '\0', sizeof(storedword));
 		strcpy(storedword, word);
 		words[j] = storedword;
 		if(DEBUG){
-			printf("word[%d]: %s\n", j, words[j]);
+			printf("words[%d]: %s\n", j, words[j]);
 		}
 	}
 
@@ -141,16 +160,20 @@ int main(int argc, char *argv[]) {
   	}
 
 	string = argv[1];
+	if(strlen(string) == 0){
+		fprintf(stderr, "%s\n", "String empty.");
+		exit(0);
+	}
 
+
+
+	string = trimwhitespace(string);
+	len = strlen(string);
 	if(DEBUG){
 
 		printf("String: %s\n", string);
 		printf("String length: %d\n", len);
 	}
-
-
-	string = trimwhitespace(string);
-	len = strlen(string);
 	if(len == 0){
 
 		fprintf(stderr, "%s\n", "ERROR: String empty.");
