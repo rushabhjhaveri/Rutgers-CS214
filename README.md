@@ -7,3 +7,4 @@ Assignments and course  material for Systems Programming (CS214), Rutgers Univer
 2. Sort.
 3. Modularize.
 4. Random aesthetic changes.
+5. Dynamic memory allocation for word.
