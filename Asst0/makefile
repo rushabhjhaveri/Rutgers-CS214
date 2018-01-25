@@ -1,5 +1,5 @@
 CC = gcc
-CCFLAGS = -g -Wall -std=c99 -lm -I.
+CCFLAGS = -g -Wall -lm -I.
 RM = rm -f
 STRINGSORTER = stringsorter
 

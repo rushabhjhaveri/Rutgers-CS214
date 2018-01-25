@@ -65,7 +65,7 @@ char *trimwhitespace(char *str)
 
 		      return str;
 }
-
+/*
 char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 	if(DEBUG){
 		printf("Entered build_words \n");
@@ -73,7 +73,7 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 	int i = 0;
 	int j = 0;
 	int k = 0;
-	size_t word_size = 5; //average word length
+	size_t word_size = 10; //average word length
 	size_t sz_mem = word_size+1; //memory required
 	char *word = malloc(sz_mem * sizeof(*word)); //allocate memory for word
 	if(!word){ //validate memory created successfullu, or throw error
@@ -95,6 +95,9 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 		}
 		if(isalpha(ch)){
 			//append(word, ch);
+			if(DEBUG){
+				printf("0.Word: \"%s\"\n", word);
+			}
 			word[k] = ch;
 			if(k == (strlen(word) - 3)){ //realloc - make word twice as big
 				void *temp = realloc(word, 2*sz_mem); //use a temporary pointer
@@ -120,14 +123,15 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 			storedword = (char*) malloc(strlen(word)+1);
 			strcpy(storedword, word);
 			wordsarr[j] = storedword;
-		/*	if(i == (len-1)){
-				wordsarr[j] = word;
-			}*/
+			
 			if(DEBUG){
 				printf("wordsarr[%d]: %s\n", j, wordsarr[j]);
 			}
-			memset(word, '\0', sizeof(*word)) ;
-			//word[0] = '\0';
+			//memset(word, '\0', sizeof(*word)) ;
+			word[0] = '\0';
+			if(DEBUG){
+				printf("3.Word:\"%s\"\n", word);
+			}
 			k = 0;
 			j++;
 		}
@@ -149,7 +153,7 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 	}
 	return wordsarr;
 }
-
+*/
 int main(int argc, char *argv[]) {
 	/*
 	   types of error:
@@ -161,6 +165,8 @@ int main(int argc, char *argv[]) {
 
 	//Variable declarations.
 	char *string = '\0';
+	char *duplicatedstr;
+	char *triplicatedstr;
 	int isChar = 0;
 	int notChar = 0;
 	int i = 0;
@@ -200,7 +206,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	//Can the character check be modularized?
-
+	
   	for(i = 0; i < strlen(string); i++)
   	{
 		if((string[i] >= 'a' && string[i] <= 'z') || (string[i] >= 'A' && string[i] <= 'Z'))
@@ -236,6 +242,23 @@ int main(int argc, char *argv[]) {
 
 	  total # of words = (# of non-alphabetical characters) + 1
 
+	  NOTE: THIS MATHEMATICAL RELATION ONLY HOLDS WHEN THERE IS EXACTLY ONE SEPARATOR BETWEEN EACH WORD. 
+
+	  HOWEVER, THE ASSIGNMENT DOES NOT SAY THAT THERE WILL BE ONLY ONE SEPARATOR BETWEEN EACH WORD.
+
+	  ASSUME NOTHING.
+
+	  Take 2
+	  -------
+
+	  Dealing with multiple separators, et al. : overwrite each non-alphabetic character with a space.
+	  Then tokenize string with strtok and pass space as a delimiter.
+	  Voila! We should now have each [distinct] word in the string.
+
+	  Determining the size of the array needed: iterate through the tokens.
+
+
+
 	  Now that we have the # of words, we have the [required] size of the array required to store the words, and can thus determine
 	  how much memory to allot to the array.
 
@@ -255,14 +278,75 @@ int main(int argc, char *argv[]) {
 
 	 */
 
-	numwords = notChar + 1;
-	arraylen = numwords;
+	//overwrite all non-alphabetic characters with spaces
+
+	
+	for(char *p = string; *p; p++){
+		if(!isalpha(*p)){
+			*p = ' ';
+		}
+	}
+
+	if(DEBUG){
+		printf("String after overwriting non-alphabetic characters with spaces: \"%s\"\n", string);
+	}
+
+	duplicatedstr = strdup(string);
+
+	char *tokens = strtok(string, " ");
+	i = 0;
+	while(tokens){
+		i++;
+		tokens = strtok(NULL, " ");
+	}
+
+	//tokens = strtok(string, " ");
+	/*
+	if(DEBUG){
+		printf("0.Printing tokens...\n");
+		while(tokens){
+			printf("Token: %s\n", tokens);
+			tokens = strtok(NULL, " ");
+		}
+	}
+	*/
+
+	arraylen = i;
+	if(DEBUG){
+		printf("arraylen: %d\n", arraylen);
+	}
+
 	char *wordsarr[arraylen];
 	wordsarr[arraylen] = '\0';
 	if(DEBUG){
 		printf("Array created.\n");
 	}
-	build_words(wordsarr, string, len, arraylen);
 
+	tokens = strtok(duplicatedstr, " ");
+	/*
+	if(DEBUG){
+		printf("Printing tokens..\n");
+		while(tokens){
+			printf("Token: %s\n", tokens);
+			tokens = strtok(NULL, " ");
+		}
+	}
+	*/
+	
+	//build_words(wordsarr, string, len, arraylen);
+	i = 0;
+	while(i < arraylen && tokens){
+		wordsarr[i] = tokens;
+		tokens = strtok(NULL, " ");
+		i++;
+	}
+
+	if(DEBUG){
+		for(i = 0; i < arraylen; i++){
+			printf("wordarr[%d]: %s\n", i, wordsarr[i]);
+		}
+	}
+
+	
   	return 0;
 }
