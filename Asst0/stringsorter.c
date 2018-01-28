@@ -42,7 +42,7 @@ char *trimwhitespace(char *str)
 		    str++;
 
 	    }
-	    
+
 
 	      if(*str == 0){  // All spaces?
 		      if(DEBUG){
@@ -153,7 +153,75 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 	}
 	return wordsarr;
 }
+<<<<<<< HEAD
 */
+//=======
+
+
+void quickSort(char* wordsarr[], int arraylen, int left, int right)
+{
+	int i, j, pivot, k;
+	char* x;
+	char temp[arraylen];
+
+	i = left;
+	j = right;
+	pivot = (left+right)/2;
+	x = wordsarr[pivot];
+
+	if(DEBUG)
+	{
+		printf("Unsorterd array: ");
+		for(k=0; k<arraylen; k++)
+		{
+			printf("%s ", wordsarr[k]);
+		}
+		printf("\n");
+	}
+
+	do
+	{
+		while((strcmp(wordsarr[i],x) < 0) && (i < right))
+		{
+			i++;
+		}
+		while((strcmp(wordsarr[j],x) > 0) && (j > left))
+		{
+			j--;
+		}
+		if(i <= j)
+		{
+			strcpy(temp, wordsarr[i]); //swap
+			strcpy(wordsarr[i], wordsarr[j]);
+			strcpy(wordsarr[j], temp);
+			i++;
+			j--;
+		}
+	} while(i <= j);
+
+	if(left < j)
+	{
+		quickSort(wordsarr, arraylen, left, j);
+	}
+	if(i< right)
+	{
+		quickSort(wordsarr, arraylen, i, right);
+	}
+
+	if(DEBUG)
+	{
+		printf("Sorterd array:\n");
+		for(k = 0; k < arraylen; k++)
+		{
+			printf("%s\n", wordsarr[k]);
+		}
+		printf("\n");
+	}
+
+
+}
+
+//>>>>>>> 9c9440b9270344fb444efebbe0595744b9758041
 int main(int argc, char *argv[]) {
 	/*
 	   types of error:
@@ -229,16 +297,32 @@ int main(int argc, char *argv[]) {
   	}
 
 	/*
+
+	numwords = notChar + 1;
+	arraylen = numwords;
+	char *wordsarr[arraylen];
+	wordsarr[arraylen] = '\0';
+	if(DEBUG){
+		printf("Array created.\n");
+	}
+	build_words(wordsarr, string, len, arraylen);
+	quickSort(wordsarr, arraylen, 0, arraylen-1);
+  	return 0;
+}*/
+
+
+
+	/*
 	  					--------------- Logic---------------
 
-	  So we have one long string. We've determined which characters are alphabets, and which are non-alphabetic characters. 
-	  
+	  So we have one long string. We've determined which characters are alphabets, and which are non-alphabetic characters.
+
 	  "thing stuff other stuff blarp"
-	  
+
 	  # of words = 5
 	  # of non-alphabetic characters = 4
 
-	  Hence [since we already have the # of non-alphabetic characters] : 
+	  Hence [since we already have the # of non-alphabetic characters] :
 
 	  total # of words = (# of non-alphabetical characters) + 1
 
@@ -267,7 +351,7 @@ int main(int argc, char *argv[]) {
 	  We traverse the string, and until we hit a non-alphabetic character, each character encountered is appended to "word" variable,
 	  thus building up each word. Once a non-alphabetic character is encountered, the word has been built, so we dump it in the array,
 	  and reset the word variable to "". Repeat this process until you reach the end of the string. At the end of the string, the end-
-	  of-string character ('\0') acts as the final stopping point. That is, the last word has been built when the end-of-string 
+	  of-string character ('\0') acts as the final stopping point. That is, the last word has been built when the end-of-string
 	  character is encountered.
 
 	  At this point, the array has been populated with each word.
@@ -277,6 +361,7 @@ int main(int argc, char *argv[]) {
 	  					  ---------- End Logic ----------
 
 	 */
+//<<<<< HEAD
 
 	//overwrite all non-alphabetic characters with spaces
 
@@ -347,6 +432,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	
+		
+	quickSort(wordsarr, arraylen, 0, arraylen-1);
   	return 0;
 }
