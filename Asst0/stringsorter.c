@@ -153,9 +153,7 @@ char** build_words(char *wordsarr[], char *string, int len, int arraylen){
 	}
 	return wordsarr;
 }
-<<<<<<< HEAD
 */
-//=======
 
 
 void quickSort(char* wordsarr[], int arraylen, int left, int right)
@@ -221,7 +219,6 @@ void quickSort(char* wordsarr[], int arraylen, int left, int right)
 
 }
 
-//>>>>>>> 9c9440b9270344fb444efebbe0595744b9758041
 int main(int argc, char *argv[]) {
 	/*
 	   types of error:
@@ -294,21 +291,8 @@ int main(int argc, char *argv[]) {
   	{
     		fprintf(stderr, "%s\n", "No alphabets");
     		exit(0);
-  	}
-
-	/*
-
-	numwords = notChar + 1;
-	arraylen = numwords;
-	char *wordsarr[arraylen];
-	wordsarr[arraylen] = '\0';
-	if(DEBUG){
-		printf("Array created.\n");
 	}
-	build_words(wordsarr, string, len, arraylen);
-	quickSort(wordsarr, arraylen, 0, arraylen-1);
-  	return 0;
-}*/
+
 
 
 
@@ -361,7 +345,6 @@ int main(int argc, char *argv[]) {
 	  					  ---------- End Logic ----------
 
 	 */
-//<<<<< HEAD
 
 	//overwrite all non-alphabetic characters with spaces
 
