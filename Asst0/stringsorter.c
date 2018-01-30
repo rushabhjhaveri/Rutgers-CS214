@@ -294,58 +294,6 @@ int main(int argc, char *argv[]) {
 	}
 
 
-
-
-	/*
-	  					--------------- Logic---------------
-
-	  So we have one long string. We've determined which characters are alphabets, and which are non-alphabetic characters.
-
-	  "thing stuff other stuff blarp"
-
-	  # of words = 5
-	  # of non-alphabetic characters = 4
-
-	  Hence [since we already have the # of non-alphabetic characters] :
-
-	  total # of words = (# of non-alphabetical characters) + 1
-
-	  NOTE: THIS MATHEMATICAL RELATION ONLY HOLDS WHEN THERE IS EXACTLY ONE SEPARATOR BETWEEN EACH WORD. 
-
-	  HOWEVER, THE ASSIGNMENT DOES NOT SAY THAT THERE WILL BE ONLY ONE SEPARATOR BETWEEN EACH WORD.
-
-	  ASSUME NOTHING.
-
-	  Take 2
-	  -------
-
-	  Dealing with multiple separators, et al. : overwrite each non-alphabetic character with a space.
-	  Then tokenize string with strtok and pass space as a delimiter.
-	  Voila! We should now have each [distinct] word in the string.
-
-	  Determining the size of the array needed: iterate through the tokens.
-
-
-
-	  Now that we have the # of words, we have the [required] size of the array required to store the words, and can thus determine
-	  how much memory to allot to the array.
-
-	  Now, we must build each word.
-
-	  We traverse the string, and until we hit a non-alphabetic character, each character encountered is appended to "word" variable,
-	  thus building up each word. Once a non-alphabetic character is encountered, the word has been built, so we dump it in the array,
-	  and reset the word variable to "". Repeat this process until you reach the end of the string. At the end of the string, the end-
-	  of-string character ('\0') acts as the final stopping point. That is, the last word has been built when the end-of-string
-	  character is encountered.
-
-	  At this point, the array has been populated with each word.
-
-	  [Sorting logic will come here.]
-
-	  					  ---------- End Logic ----------
-
-	 */
-
 	//overwrite all non-alphabetic characters with spaces
 
 	
