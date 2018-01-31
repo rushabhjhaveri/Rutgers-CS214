@@ -88,7 +88,7 @@ char **processAndBuildStrArr(char* str, int *retArrLen) {
                 noOfStrings *=2;               // double the number of strings each time we reallocate
 
                 if (DEBUG) {
-                   printf("13  In else of arrOfStrings allocation arrIndex=[%d]  noOfStrings = [%d]\n",arrIndex,noOfStrings);
+                   printf("13  In else of arrOfStrings allocation arrIndex=[%d]  noOfStrings = [%d]\n",arrIndex, (int) noOfStrings);
                 }
 
                 if (! (arrOfStrings =  realloc(arrOfStrings, (noOfStrings * sizeof(*arrOfStrings)) )) ) {
@@ -197,7 +197,7 @@ char **processAndBuildStrArr(char* str, int *retArrLen) {
                 // reallocate the arrOfStrings and then copy
                 noOfStrings *=2;               // double the number of strings each time we reallocate
                 if (DEBUG) {
-                    printf("17.  In else of arrOfStrings allocation arrIndex=[%d]  noOfStrings = [%d]\n",arrIndex,noOfStrings);
+                    printf("17.  In else of arrOfStrings allocation arrIndex=[%d]  noOfStrings = [%d]\n",arrIndex, (int) noOfStrings);
                 }
                 if (! (arrOfStrings =  realloc(arrOfStrings, (noOfStrings * sizeof(*arrOfStrings)))) ) {
                    printf("18. In processAndNuildStrArr : ReAllocation of Memory failed for arrOfStrings[arrIndex]\n");
@@ -256,10 +256,11 @@ int main (int argc, char** argv) {
 
     char **retArrofStrings;
     int retArrLen = 0;
+		int i;
 
     if (DEBUG) {
      printf("The fol. arguments are passed to main()\n");
-     for (int i = 0; i < argc; i++) {
+     for (i = 0; i < argc; i++) {
        printf("[%s] :", argv[i]);
      }
      printf("\n");
@@ -297,7 +298,8 @@ int main (int argc, char** argv) {
      printf("In main - After calling sort\n");
   }
 
-  for (int tmpi = 0; tmpi < retArrLen ; tmpi++) {
+	int tmpi;
+  for (tmpi = 0; tmpi < retArrLen ; tmpi++) {
       printf("%s\n",retArrofStrings[tmpi]);
   }
 
