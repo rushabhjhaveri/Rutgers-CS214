@@ -268,7 +268,7 @@ int main (int argc, char** argv) {
 
   if (argc != 2) {
      //printf("ERROR : Invalid no. of arguments passed to the program\n");
-     printf("Usgae : stringsorter \"<a string>\"\n");
+     printf("Usage : stringsorter <\"a string\">\n");
      exit(1);
   }
 
@@ -301,5 +301,6 @@ int main (int argc, char** argv) {
       printf("%s\n",retArrofStrings[tmpi]);
   }
 
+	return 0;
 
 }
