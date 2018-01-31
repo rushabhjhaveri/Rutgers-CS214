@@ -1,13 +1,9 @@
-#include<stdio.h>
-#include<string.h>
-#include<ctype.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
 
-
-// Prototypes
-char **processAndBuildStrArr(char*, int*);     // main routine to build an dynamic Array of Strings
-void sort(char **, int ); 		       // routine to sort the strings
-void swap(char **, char **);		       // routine to swap the 2 string ariguments
+#include "stringsorter.h"
 
 typedef enum { false, true } bool;        //   for boolean variables definition
 
