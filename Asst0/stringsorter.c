@@ -1,280 +1,308 @@
-/*
-======================================
-Class: Systems Programming [CS214]
-
-Semester: Spring 2018
-
-Assignment 0
-
-Collaborator Name       NetID
-
-Hetalben Patel          hp373
-
-Rushabh Jhaveri         rrj28
-=========================================
-*/
-
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <math.h>
 #include <ctype.h>
+#include <stdlib.h>
+
 #include "stringsorter.h"
 
-unsigned int DEBUG = 1; // NO DEBUG = 0 ; DEBUG = 1
+typedef enum { false, true } bool;        //   for boolean variables definition
 
-char *trimwhitespace(char *str)
-{
-	if(DEBUG){
-		printf("string entering trim: %s\n", str);
-	}
+// global variables
+int DEBUG = 0;          // DEBUG = 1 , NO DEBUG = 0
+int INIT_WORD_LEN = 10;  // initial word size
+int INIT_NO_OF_STRINGS = 10; // initial number of strings in an array
 
-	  char *end;
+char **processAndBuildStrArr(char* str, int *retArrLen) {
+    // local variables
 
-	    // Trim leading space
-//	    while(!isalpha((unsigned char)*str)) str++;
+    char *word;                   // stores the word (string)
+    char ch;                      // stores each character from str
+    int wordIndex = 0;
+    bool wordStarted = false;
+    size_t wordLen = INIT_WORD_LEN;
 
-	    while((!isalpha((unsigned char)*str)) &&  strlen(str) != 0) {
-		    if(DEBUG){
-			    printf("Str in first  while is : %s", str);
-		    }
-		    str++;
-
-	    }
+    char **arrOfStrings ;          // will store the array of strings (word)
+    int arrIndex = 0;
+    size_t noOfStrings = INIT_NO_OF_STRINGS;   // initially value of number of stings in an array
 
 
-	      if(*str == 0){  // All spaces?
-		      if(DEBUG){
-			      printf("Returning null char \n");
-		      }
-		         // return '\0';
-		          return str;
-	      }
+    bool delimsAtStart = true;    // initial set to true, when the first alphabetic character is hit set it to false
 
-	        // Trim trailing space
-	        end = str + strlen(str) - 1;
-		  //while(end > str && isspace((unsigned char)*end)) end--;
-		  while(end > str && (!isalpha((unsigned char)*end))) end--;
+    // check the argument received
+    if (DEBUG) {
+      printf("1.In processAndBuildStrArr: str = [%s]\n",str);
+    }
 
-		    // Write new null terminator
-		    *(end+1) = '\0';
-		    if(DEBUG){
-			    printf("string leaving trim: \"%s\" : %d\n", str, (int) strlen(str));
-		    }
+    // allocate space to arrOfStrings  for noOfStrings
+    if (! (arrOfStrings = malloc((noOfStrings) * sizeof(*arrOfStrings))) ) {
+          printf ("0.In processAndBuildStrArr ERROR: Memory Allocation failure for arrOfStrings\n");
+          exit(-1);
+    }
+    memset(arrOfStrings,'\0', ((noOfStrings) * sizeof(*arrOfStrings)));
 
-		      return str;
+   // loop thru the string str and process to build a word String and then an array of strings
+   while (*str != '\0') {
+       ch = str[0];
+
+       // check if the character is non-alphabetic and at the beginning of the string
+       if ( (delimsAtStart) && (!isalpha(ch)) ) {
+          if (DEBUG) {
+              printf("2.In processAndBuildStrArr : ch = [%c]\n",ch);
+          }
+          // ignore the character as it's a separator at the beginning
+          str++;         // move the str ptr to next character
+
+       } else if (!isalpha(ch)) {
+          // this condition is met when there are delimiters after the word
+          // or at the end of the passed string
+
+          if (wordStarted) {
+             word[wordIndex] = '\0';
+             if (DEBUG) {
+                 printf("6.In processAndBuildStrArr : word = [%s]\n",word);
+             }
+             wordStarted = false;
+             wordIndex = 0;
+
+             // add the word to arrOfStrings at arrIndex
+             // check arrIndex against noOfStrings - if < then allocate space for the string and copy the word string
+             //                                      if >= then reallocate the arrOfStrings and then copy
+             if (arrIndex < (noOfStrings -2)) {
+                if (! (arrOfStrings[arrIndex] = malloc(strlen(word) + 1)) ) {
+                   printf("11. In processAndNuildStrArr : Memory allocation failed for arrOfStrings[arrIndex]\n");
+                   exit(-1);
+                }
+                // copy the word into the arrrOfStrings
+                strcpy(arrOfStrings[arrIndex], word);
+
+                if (DEBUG) {
+                   printf("12. In processAndNuildStrArr:arrOfStrings[%d]=%s\n",arrIndex,arrOfStrings[arrIndex]);
+                }
+                arrIndex++;
+
+                // free the word
+                free(word);
+             } else {
+
+                // reallocate the arrOfStrings and then copy
+                noOfStrings *=2;               // double the number of strings each time we reallocate
+
+                if (DEBUG) {
+                   printf("13  In else of arrOfStrings allocation arrIndex=[%d]  noOfStrings = [%d]\n",arrIndex, (int) noOfStrings);
+                }
+
+                if (! (arrOfStrings =  realloc(arrOfStrings, (noOfStrings * sizeof(*arrOfStrings)) )) ) {
+                   printf("13.1 In processAndNuildStrArr : ReAllocation of Memory failed for arrOfStrings[arrIndex]\n");
+                   exit(-1);
+
+                }
+                // copy the word into the arrrOfStrings
+                if (! (arrOfStrings[arrIndex] = malloc(strlen(word) + 1)) ) {
+                      printf("13.2. In processAndNuildStrArr : Memory allocation failed for arrOfStrings[arrIndex]\n");
+                      exit(-1);
+                }
+                // copy the word into the arrrOfStrings
+                strcpy(arrOfStrings[arrIndex], word);
+
+                if (DEBUG) {
+                   printf("13.3. In processAndNuildStrArr:arrOfStrings[%d]=%s\n",arrIndex,arrOfStrings[arrIndex]);
+                }
+                arrIndex++;
+
+                // free the word
+                free(word);
+
+             }
+          }  // end if wordStarted
+
+          str++;         // move the str ptr to next character
+
+       } else {
+
+          // alphabetic character encountered - start building the string for here
+          if ( (delimsAtStart) || (!wordStarted) ) {
+             // if (! (word = (char *)malloc(sizeof(char) * (wordLen+1))) ) {   // same output as next stmt
+
+             if (! (word = (char *)malloc( (wordLen+1))) ) {
+                 printf ("3.In processAndBuildStrArr ERROR: Memory Allocation failure \n");
+                 exit(-1);
+             }
+             wordStarted = true;             // set wordStarted to true
+             //memset(word,'\0',sizeof(word));   // init the word
+             memset(word, '\0',(wordLen+1));
+          }
+
+          delimsAtStart = false;             // hit a alphabetic char - change  value to false
+
+          if (DEBUG) {
+              printf("4.In processAndBuildStrArr : ch = [%c]\n",ch);
+          }
+
+          // add the character to word string
+          // check the variable   wordIndex against INIT_WORD_LEN
+          if (wordIndex <= (wordLen - 2)) {
+             // word array size is withing limits so just push the ch to word array
+             word[wordIndex] = ch;
+             if (DEBUG) {
+                 printf("5.In processAndBuildStrArr : word[%d] = [%c]\n",wordIndex,ch);
+             }
+             wordIndex++;
+
+          } else {
+             //case of extending the word string
+             wordLen *=2;
+             if (! (word = (char *)realloc(word,(wordLen+1))) ) {
+                 printf ("8.In processAndBuildStrArr ERROR: ReAllocation Memory failure \n");
+                 exit(-1);
+             }
+             word[wordIndex] = ch;
+             if (DEBUG) {
+                 printf("9.In processAndBuildStrArr : word[%d] = [%c]\n",wordIndex,ch);
+             }
+             wordIndex++;
+
+          }
+
+         str++;         // move the str ptr to next character
+       }
+   }  // end while
+
+   if (wordStarted) {
+       word[wordIndex] = '\0';
+       if (DEBUG) {
+	   printf("7.In processAndBuildStrArr : word = [%s]\n",word);
+       }
+       wordStarted = false;
+       wordIndex = 0;
+       // add the word to arrOfStrings at arrIndex
+       // check arrIndex against noOfStrings - if < then allocate space for the string and copy the word string
+       //                                      if >= then reallocate the arrOfStrings and then copy
+       if (arrIndex < (noOfStrings -2)) {
+                if (! (arrOfStrings[arrIndex] = malloc(strlen(word) + 1)) ) {
+                   printf("15. In processAndNuildStrArr : Memory allocation failed for arrOfStrings[arrIndex]\n");
+                   exit(-1);
+                }
+                // copy the word into the arrrOfStrings
+                strcpy(arrOfStrings[arrIndex], word);
+
+                if (DEBUG) {
+                   printf("16. In processAndNuildStrArr:arrOfStrings[%d]=%s\n",arrIndex,arrOfStrings[arrIndex]);
+                }
+                arrIndex++;
+
+                // free the word
+                free(word);
+       }  else {
+
+                // reallocate the arrOfStrings and then copy
+                noOfStrings *=2;               // double the number of strings each time we reallocate
+                if (DEBUG) {
+                    printf("17.  In else of arrOfStrings allocation arrIndex=[%d]  noOfStrings = [%d]\n",arrIndex, (int) noOfStrings);
+                }
+                if (! (arrOfStrings =  realloc(arrOfStrings, (noOfStrings * sizeof(*arrOfStrings)))) ) {
+                   printf("18. In processAndNuildStrArr : ReAllocation of Memory failed for arrOfStrings[arrIndex]\n");
+                   exit(-1);
+
+                }
+                // copy the word into the arrrOfStrings
+			    if (! (arrOfStrings[arrIndex] = malloc(strlen(word) + 1)) ) {
+					 printf("18.1. In processAndNuildStrArr : Memory allocation failed for arrOfStrings[arrIndex]\n");
+					 exit(-1);
+			    }
+			    // copy the word into the arrrOfStrings
+			    strcpy(arrOfStrings[arrIndex], word);
+
+			    if (DEBUG) {
+				  printf("18.2. In processAndNuildStrArr:arrOfStrings[%d]=%s\n",arrIndex,arrOfStrings[arrIndex]);
+			    }
+
+                arrIndex++;
+
+                // free the word
+                free(word);
+
+       }
+   }  // end if wordStarted
+
+   if (DEBUG) {
+      printf("20.  In processAndNuildStrArr - Just before return \n");
+   }
+   *retArrLen = arrIndex;
+   return(arrOfStrings);
+
 }
 
-
-void quickSort(char* wordsarr[], int arraylen, int left, int right)
-{
-	int i, j, pivot, k;
-	char* x;
-	char temp[arraylen];
-
-	i = left;
-	j = right;
-	pivot = (left+right)/2;
-	x = wordsarr[pivot];
-
-	if(DEBUG)
-	{
-		printf("Unsorterd array: ");
-		for(k=0; k<arraylen; k++)
-		{
-			printf("%s ", wordsarr[k]);
-		}
-		printf("\n");
-	}
-
-	do
-	{
-		while((strcmp(wordsarr[i],x) < 0) && (i < right))
-		{
-			i++;
-		}
-		while((strcmp(wordsarr[j],x) > 0) && (j > left))
-		{
-			j--;
-		}
-		if(i <= j)
-		{
-			strcpy(temp, wordsarr[i]); //swap
-			strcpy(wordsarr[i], wordsarr[j]);
-			strcpy(wordsarr[j], temp);
-			i++;
-			j--;
-		}
-	} while(i <= j);
-
-	if(left < j)
-	{
-		quickSort(wordsarr, arraylen, left, j);
-	}
-	if(i< right)
-	{
-		quickSort(wordsarr, arraylen, i, right);
-	}
-
-	if(DEBUG)
-	{
-		printf("Sorterd array:\n");
-		for(k = 0; k < arraylen; k++)
-		{
-			printf("%s\n", wordsarr[k]);
-		}
-		printf("\n");
-	}
-
-
+void swap(char **s1, char **s2){
+    char *tmp=*s1;
+    *s1=*s2;
+    *s2=tmp;
 }
 
-int main(int argc, char *argv[]) {
-	/*
-	   types of error:
-           1. null string
-           2. no input
-           3. more than 1 input
-           4. no alphabets
-         */
+void sort(char **m, int dim) {
+    int i, j, flag=1;
 
-	//Variable declarations.
-	char *string = '\0';
-	char *duplicatedstr;
-	char *triplicatedstr;
-	int isChar = 0;
-	int notChar = 0;
-	int i = 0;
-	int len = 0;
-	int numwords = 0;
-	int arraylen = 0;
+    for(i=0; i<dim-1 && flag==1; i++){
+        flag=0;
+        for(j=0; j<dim-1; j++)
+            if(strcmp(m[j],m[j+1])>0){
+                swap(&m[j],&m[j+1]);
+                flag=1;
+            }
+    }
+}
 
-	//Can we please modularize this into an arg_check function?
-  	if(argc != 2)
-	{
-		fprintf(stderr, "%s\n", "ERROR: Invalid number of arguments.");
-    		exit(0);
-  	}
-
-	string = argv[1];
-	if(strlen(string) == 0){
-		fprintf(stderr, "%s\n", "String empty.");
-		exit(0);
-	}
+int main (int argc, char** argv) {
 
 
+    char **retArrofStrings;
+    int retArrLen = 0;
+		int i;
 
-	string = trimwhitespace(string);
-	len = strlen(string);
-	if(DEBUG){
-
-		printf("String: %s\n", string);
-		printf("String length: %d\n", len);
-	}
-	if(len == 0){
-
-		fprintf(stderr, "%s\n", "ERROR: String empty.");
-		exit(0);
-	}
-	if(DEBUG){
-		printf("string: \"%s\"\n", string);
-	}
-
-	//Can the character check be modularized?
-	
-  	for(i = 0; i < strlen(string); i++)
-  	{
-		if((string[i] >= 'a' && string[i] <= 'z') || (string[i] >= 'A' && string[i] <= 'Z'))
-		{
-			isChar++;
-    		}
-    		else
-    		{
-      			notChar++;
-    		}
-  	}
-
-	printf("isChar count: %d\n", isChar);
-  	printf("notChar count: %d\n", notChar);
-
-  	if(isChar == 0)
-  	{
-    		fprintf(stderr, "%s\n", "No alphabets");
-    		exit(0);
-	}
+    if (DEBUG) {
+     printf("The fol. arguments are passed to main()\n");
+     for (i = 0; i < argc; i++) {
+       printf("[%s] :", argv[i]);
+     }
+     printf("\n");
+  } // END DEBUG
 
 
-	//overwrite all non-alphabetic characters with spaces
+  if (argc != 2) {
+     //printf("ERROR : Invalid no. of arguments passed to the program\n");
+     printf("Usage : stringsorter <\"a string\">\n");
+     exit(1);
+  }
 
-	
-	for(char *p = string; *p; p++){
-		if(!isalpha(*p)){
-			*p = ' ';
-		}
-	}
+  if (strlen(argv[1]) == 0 ) {
+     //printf("ERROR : Empty String\n");
+     exit(1);
+  }
 
-	if(DEBUG){
-		printf("String after overwriting non-alphabetic characters with spaces: \"%s\"\n", string);
-	}
+  retArrofStrings=processAndBuildStrArr(argv[1], &retArrLen);
+  if (!retArrofStrings) {
+      printf ("ERROR : In main : Unable to allicate retArrofStrings\n");
+  }
 
-	duplicatedstr = strdup(string);
+  if (DEBUG) {
+     printf("In main - Value of retArrLen = [%d]\n",retArrLen);
+  }
 
-	char *tokens = strtok(string, " ");
-	i = 0;
-	while(tokens){
-		i++;
-		tokens = strtok(NULL, " ");
-	}
+  /*for (int tmpi = 0; tmpi < retArrLen ; tmpi++) {
+      printf("retArrofStrings[%d]=[%s]\n",tmpi,retArrofStrings[tmpi]);
+  }*/
 
-	//tokens = strtok(string, " ");
-	/*
-	if(DEBUG){
-		printf("0.Printing tokens...\n");
-		while(tokens){
-			printf("Token: %s\n", tokens);
-			tokens = strtok(NULL, " ");
-		}
-	}
-	*/
+  // call the sort function
+  sort(retArrofStrings,retArrLen);
 
-	arraylen = i;
-	if(DEBUG){
-		printf("arraylen: %d\n", arraylen);
-	}
+  if (DEBUG) {
+     printf("In main - After calling sort\n");
+  }
 
-	char *wordsarr[arraylen];
-	wordsarr[arraylen] = '\0';
-	if(DEBUG){
-		printf("Array created.\n");
-	}
+	int tmpi;
+  for (tmpi = 0; tmpi < retArrLen ; tmpi++) {
+      printf("%s\n",retArrofStrings[tmpi]);
+  }
 
-	tokens = strtok(duplicatedstr, " ");
-	/*
-	if(DEBUG){
-		printf("Printing tokens..\n");
-		while(tokens){
-			printf("Token: %s\n", tokens);
-			tokens = strtok(NULL, " ");
-		}
-	}
-	*/
-	
-	//build_words(wordsarr, string, len, arraylen);
-	i = 0;
-	while(i < arraylen && tokens){
-		wordsarr[i] = tokens;
-		tokens = strtok(NULL, " ");
-		i++;
-	}
+	return 0;
 
-	if(DEBUG){
-		for(i = 0; i < arraylen; i++){
-			printf("wordarr[%d]: %s\n", i, wordsarr[i]);
-		}
-	}
-
-		
-	quickSort(wordsarr, arraylen, 0, arraylen-1);
-  	return 0;
 }

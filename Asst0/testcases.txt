@@ -1,0 +1,77 @@
+String Sorter
+
+Hetal Patel - hp373
+Rushabh Jhaveri - rrj28
+Systems Programming, Spring 2018
+
+
+1. "beep Beep BEEP bEEP beEp"
+    Output: BEEP
+	    Beep
+	    bEEP
+	    beEp
+	    beep
+	 
+
+2. "hi1234567890bye,./;'[]why^;'no()"
+    Output: bye
+	    hi
+	    no 
+	    why 
+
+
+3. ",./;'[]1234567890"
+    Output: <nothing>
+
+
+4. "oef" odo
+    Output: Usage : stringsorter <"a string">
+
+
+5. "Name                        name -09876543      bye"
+    Output: Name
+            bye
+   	    name
+
+
+6. "zxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiop"
+    Output: 
+    zxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiopzxcvbnmasdfghjklqwertyuiop
+
+
+7. "Aa AA11 b Bb/,  BB; c"
+    Output: AA
+	    Aa
+	    BB
+	    Bb
+	    b 
+	    c 
+
+
+8. "thing1111stuff,,,,,Other  idea//  BLaRp"
+    Output: BLaRp
+	    Other
+	    idea
+      	    thing 
+
+
+9. "hi hi hello Hello bye bye"
+    Output: Hello
+	    bye
+	    bye
+	    hi
+	    hi
+
+
+10. "hi  frieN .. my NAmE?? rOoSie PlS..gIve  Me  cOokIe."
+     Output: Me
+  	     NAmE
+  	     PlS
+  	     cOokIe
+  	     frieN
+  	     gIve
+  	     hi 
+  	     my
+  	     rOoSie
+
+
