@@ -52,4 +52,17 @@ Salient features of the stack:
 * However, if the data needs to be preserved or kept in some form, then it must be copied from the stack before the function exits.
 * Thus, stack-based allocation is best for temporary data or data which is no longer required after the creating function exits.
 
+## Call Stack ##
 
+A call stack is composed of stack frames (aka activation records).
+
+These are machine-dependent data structures containing subroutine state information. 
+
+Each stack frame corrosponds to a call to a subroutine which has not terminated with a return.
+
+## Additional Information About the Stack ##
+
+Noteworthy:
+* The OS allocates the stack for each system-level thread when the thread is created. Typically, the OS is called by the language runtime to allocate the heap for the application.
+* The stack is attached to a thread, so when the thread exits, the stack is reclaimed. The heap is typically allocated at application startup by the runtime, and is reclaimed when the application (technically, the process) exits.
+* The size of the stack is set when a thread is created.
