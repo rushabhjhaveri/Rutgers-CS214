@@ -77,3 +77,12 @@ Noteworthy:
 * Use stack if you know exactly how much data you need to allocate before compile time, and make sure it is not too large.
 * The stack usually has a maximum size that is already determined when the program starts.
 
+## Stack Overflow ##
+
+Stack-based memory errors - bad bad bad! So bad!
+
+When using heap-based memory, if you overshoot the bounds of the allocated block, it can still trigger a segmentation fault.
+**Exception:** If the memory block is incidentally contiguous with another block that was previously allocated.
+
+Variables created on the stack are always contiguous with each other. Writing out of bounds can change the value of another variable.
+
