@@ -66,3 +66,6 @@ Noteworthy:
 * The OS allocates the stack for each system-level thread when the thread is created. Typically, the OS is called by the language runtime to allocate the heap for the application.
 * The stack is attached to a thread, so when the thread exits, the stack is reclaimed. The heap is typically allocated at application startup by the runtime, and is reclaimed when the application (technically, the process) exits.
 * The size of the stack is set when a thread is created.
+* The stack is faster because the access pattern makes it trivial to allocate memory from it, while the heap has much more complex bookkeeping involved in an allocation or a free. Also, each byte in the stack tends to be reused very frequently, which means it tends to be mapped to the processor's cache, making it very fast.
+* Stored in computer's RAM [like the heap].
+* Variables created on the stack will go out of scope and automatically deallocate.
