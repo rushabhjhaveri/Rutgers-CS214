@@ -140,6 +140,37 @@ void * mymalloc(size_t requested_size, char * file, int line_no){
 	return NULL;
 }
 
+void myfree (void * ptr, char * file, int line_no){
+
+	//Error check - if pointer passed to free is null
+	if(ptr == NULL){
+		return NULL;
+	}
+	
+	/*
+	   Malloc returns a pointer to the address of the array block.
+	   We need to make sure the header part [which stores the information regarding
+	   cell size, whether allocated, et al.] is also within the array block. Thus,
+	   it is sufficient to set the init pointer to the start of the header section.
+	*/
+
+	header * init_ptr = (header *) (ptr - sizeof(header));
+
+	//Error check - if pointer is outside array block
+	if(init_ptr < first_header || (char *) ptr > &myblock[memsize-1]){
+		fprintf(stderr, "%s: %d ERROR: Pointer out of range.\n", file, line_no);
+		exit(1);
+	}
+
+	//Move variable declaration to the top.
+	int allocated = if_allocated(init_ptr);
+	if(!allocated){
+		fprintf(stderr, "%s: %d ERROR: Memory unallocated. Cannot free unallocated memory.\n");
+		exit(1);
+	}
+	return NULL;
+}
+
 int main(){
 	return 0;
 }
