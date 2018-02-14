@@ -168,6 +168,42 @@ void myfree (void * ptr, char * file, int line_no){
 		fprintf(stderr, "%s: %d ERROR: Memory unallocated. Cannot free unallocated memory.\n");
 		exit(1);
 	}
+
+	/*
+	   The big idea:
+
+	   First, set the allocation flag of the block, to which the passed pointer points to, to 0, to indicate that it is being deallocated.
+	   Make sure that said block is not the last block. Also look at the next block.
+	   Check if the next block is also unallocated. The idea here is that we're merging all the blocks to be free'd, AND the next one too, if unallocated, to enable the memory manager to know there is a block of n size available for use, making it slightly more efficient.
+	   Similarly, we merge all the block to the left [previous blocks], giving an idea of how many blocks are free to the left as well.
+
+	*/
+
+	init_ptr -> is_allocated = 0;
+	int freed_size; //Can we have a better name for this?
+	header * next_block = next_ptr(init_ptr);
+
+	if((!init_ptr -> is_last) && (!next_block -> is_allocated)){
+		ret_size = get_size(init_ptr) + get_size(next_block) + sizeof(header);
+		init_ptr -> block_size = ret_size;
+		init_ptr -> is_last = next_block -> is_last;
+
+		if(!init_ptr -> is_last){
+			header * new_next_block = next_ptr(init_ptr);
+			new_next_block -> prev_block_size = get_size(init_ptr);
+		}
+	}
+	
+	header * prev_block = prev_ptr(init_ptr)
+	if(init_ptr != first_header && !prev_block -> is_allocated){
+		prev_block -> block_size = get_size(init_ptr) + sizeof(header) + prev_block -> block_size;
+		prev_block -> is_last = init_ptr -> is_last;
+
+		if(!init_ptr -> is_last){
+			header * new_next_block = next_ptr(init_ptr);
+			new_next_block -> prev_block_size = get_size(prev_block);
+		}
+	}
 	return NULL;
 }
 
