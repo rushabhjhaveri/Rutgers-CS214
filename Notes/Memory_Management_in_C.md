@@ -69,3 +69,20 @@ Noteworthy:
 * The stack is faster because the access pattern makes it trivial to allocate memory from it, while the heap has much more complex bookkeeping involved in an allocation or a free. Also, each byte in the stack tends to be reused very frequently, which means it tends to be mapped to the processor's cache, making it very fast.
 * Stored in computer's RAM [like the heap].
 * Variables created on the stack will go out of scope and automatically deallocate.
+* Much faster to allocate in comparison to variables on the heap.
+* Implementation - actual stack data structure.
+* Used for storing local data, returning addresses, and passing parameters.
+* Stack overflow: when too much of the stack is used [mostly from infinite / too much recursion, or very large allocations].
+* Data created on the stack can be used without pointers.
+* Use stack if you know exactly how much data you need to allocate before compile time, and make sure it is not too large.
+* The stack usually has a maximum size that is already determined when the program starts.
+
+## Stack Overflow ##
+
+Stack-based memory errors - bad bad bad! So bad!
+
+When using heap-based memory, if you overshoot the bounds of the allocated block, it can still trigger a segmentation fault.
+**Exception:** If the memory block is incidentally contiguous with another block that was previously allocated.
+
+Variables created on the stack are always contiguous with each other. Writing out of bounds can change the value of another variable.
+
