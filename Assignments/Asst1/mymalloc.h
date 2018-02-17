@@ -11,12 +11,14 @@ typedef struct{
 #define malloc(x) mymalloc(x, __FILE__, __LINE__)
 #define free(x) myfree(x, __FILE__, __LINE__)
 
+#include<stdlib.h>
 
 int if_allocated(header*);
 header * next_ptr(header *);
 header * prev_ptr(header *);
-char * get_hexaddress(header *);
+void * get_hexaddress(header *);
 int get_islast(header *);
 int get_size(header *);
-
+void * mymalloc(size_t, char *, int);
+void myfree(void *, char *, int);
 #endif

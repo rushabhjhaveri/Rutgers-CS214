@@ -1,12 +1,19 @@
-CC = gcc
+CC = gcc -Wall -Werror -fsanitize=address
 RM = rm -f
-MYMALLOC = mymalloc
+MEMGRIND = memgrind
+OBJECTS = memgrind.o mymalloc.o
 
 
-all: $(MYMALLOC)
+$(MEMGRIND): $(OBJECTS)
+	$(CC) $(OBJECTS) -o $(MEMGRIND)
 
-$(MYMALLOC): mymalloc.c
-	$(CC) -Wall -Werror -o mymalloc mymalloc.c
+memgrind.o: memgrind.c mymalloc.h
+	$(CC) -c memgrind.c
+
+mymalloc.o: mymalloc.c mymalloc.h
+	$(CC) -c mymalloc.c
+
 
 clean:
-	$(RM) $(MYMALLOC)
+	$(RM) $(MEMGRIND) $(OBJECTS)
+

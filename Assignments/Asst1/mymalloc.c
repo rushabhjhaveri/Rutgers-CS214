@@ -7,7 +7,7 @@
 
 static char myblock[5000];
 #define memsize 5000
-int DEBUG = 1; // NO DEBUG = 0 DEBUG = 1
+//int DEBUG = 1; // NO DEBUG = 0 DEBUG = 1
 
 header * first_header = (header *) &myblock[0];
 
@@ -21,7 +21,7 @@ int get_islast(header * curr_ptr){
 	return curr_ptr -> is_last;
 }
 
-char * get_hexaddress(header * curr_ptr){
+void * get_hexaddress(header * curr_ptr){
 
 	char * ret_ptr;
 
@@ -29,7 +29,7 @@ char * get_hexaddress(header * curr_ptr){
 
 	ret_ptr = ret_ptr + sizeof(header);
 
-	return ret_ptr;
+	return (void *) ret_ptr;
 }
 
 header * prev_ptr(header * curr_ptr){
@@ -127,7 +127,7 @@ void * mymalloc(size_t requested_size, char * file, int line_no){
 				next_block -> prev_block_size = get_size(new_block_header);
 			} //End inner-if
 
-			return get_hexaddress(curr_ptr);
+			return  get_hexaddress(curr_ptr);
 		} //End main if
 
 		else if(get_islast(curr_ptr)){ //Last block; no match; return error / null
@@ -144,7 +144,7 @@ void myfree (void * ptr, char * file, int line_no){
 
 	//Error check - if pointer passed to free is null
 	if(ptr == NULL){
-		return NULL;
+		return;
 	}
 	
 	/*
@@ -165,7 +165,7 @@ void myfree (void * ptr, char * file, int line_no){
 	//Move variable declaration to the top.
 	int allocated = if_allocated(init_ptr);
 	if(!allocated){
-		fprintf(stderr, "%s: %d ERROR: Memory unallocated. Cannot free unallocated memory.\n");
+		fprintf(stderr, "%s: %d ERROR: Memory unallocated. Cannot free unallocated memory.\n", file, line_no);
 		exit(1);
 	}
 
@@ -182,10 +182,9 @@ void myfree (void * ptr, char * file, int line_no){
 	init_ptr -> is_allocated = 0;
 	int freed_size; //Can we have a better name for this?
 	header * next_block = next_ptr(init_ptr);
-
 	if((!init_ptr -> is_last) && (!next_block -> is_allocated)){
-		ret_size = get_size(init_ptr) + get_size(next_block) + sizeof(header);
-		init_ptr -> block_size = ret_size;
+		freed_size = get_size(init_ptr) + get_size(next_block) + sizeof(header);
+		init_ptr -> block_size = freed_size;
 		init_ptr -> is_last = next_block -> is_last;
 
 		if(!init_ptr -> is_last){
@@ -194,7 +193,7 @@ void myfree (void * ptr, char * file, int line_no){
 		}
 	}
 	
-	header * prev_block = prev_ptr(init_ptr)
+	header * prev_block = prev_ptr(init_ptr);
 	if(init_ptr != first_header && !prev_block -> is_allocated){
 		prev_block -> block_size = get_size(init_ptr) + sizeof(header) + prev_block -> block_size;
 		prev_block -> is_last = init_ptr -> is_last;
@@ -204,9 +203,9 @@ void myfree (void * ptr, char * file, int line_no){
 			new_next_block -> prev_block_size = get_size(prev_block);
 		}
 	}
-	return NULL;
 }
-
+/*
 int main(){
 	return 0;
 }
+*/
