@@ -12,7 +12,7 @@ double workloadA(){
 	int i = 0;
 	double time_taken = 0;
 	struct timeval tv1, tv2;
-	void* testarr[1000];
+	void* testarr[5000];
 	gettimeofday(&tv1, NULL);
 	for(i = 0; i < 150; i++){
 		testarr[i] = malloc(1);
@@ -39,7 +39,7 @@ double workloadB(){
 	int i = 0;
 	double time_taken = 0;
 	struct timeval tv1, tv2;
-	void* testarr[1000];
+	void* testarr[5000];
 	gettimeofday(&tv1, NULL);
 	for(i = 0; i < 150; i++){
 		testarr[i] = malloc(1);
@@ -69,7 +69,7 @@ double workloadC(){
 	int i = 0;
 	double time_taken = 0;
 	struct timeval tv1, tv2;
-	void* testarr[1000];
+	void* testarr[5000];
 	int malloc_counter = 0;
 	int free_counter = 0;
 	int random_bit = 0;
@@ -205,6 +205,7 @@ double workloadE(){
 	int size_occupied = 0;
 	int random_index = 0;
 	gettimeofday(&tv1, NULL);
+	/*
 	while(malloc_counter < 50){
 		random_bit = (rand() % 2);
 		if(random_bit || size_occupied  == 0){//malloc a new byte
@@ -248,32 +249,27 @@ double workloadE(){
 			printf("freed\n");
 		}
 	}
-	
-	testarr[size_occupied] = malloc(50);
-	malloc_counter++;
-	if(DEBUG){
-		printf("malloced %p 50\n", &testarr[size_occupied]);
-	}
-/*	
+	*/
+
 	while(malloc_counter < 100){
-		random_bit = (rand() % 2);
-		if(random_bit || size_occupied  == 0){//malloc a new byte
-			random_size = (rand() > RAND_MAX/2) ? 2 : 3;
+		random_bit = (rand() % 3);
+		if(random_bit == 0 || size_occupied  == 0){//malloc a new byte
+			random_size = 2 * ((rand() % 20) + 1);
 			testarr[size_occupied] = malloc(random_size);
 			malloc_counter++;
 			size_occupied++;
 			if(DEBUG){
-				printf("malloced %p random_size %d \n", &testarr[size_occupied], random_size);
+				printf("malloced %p random_size %d malloc_counter: %d\n", &testarr[size_occupied], random_size,malloc_counter);
 			}
 		}
-		else{
+		else if(random_bit == 1){
 			random_index = rand() % size_occupied;
 			if(random_index == (size_occupied -1)){
 				free(testarr[random_index]);
 				testarr[random_index] = 0;
 				free_counter++;
 				if(DEBUG){
-					printf("freed\n");
+					printf("freed, free_counter:%d\n", free_counter);
 				}
 			}
 			else{
@@ -282,24 +278,34 @@ double workloadE(){
 				testarr[size_occupied-1] = 0;
 				free_counter++;
 				if(DEBUG){
-					printf("freed\n");
+					printf("freed, freE_counter: %d\n", free_counter);
 				}
 			}
 
 			size_occupied--;
 		}
+		else{
+			for(i = 0; i < 50; i++){
+				testarr[size_occupied] = malloc(1);
+				malloc_counter++;
+				free(testarr[i]);
+				free_counter++;
+				if(DEBUG){
+					printf("In for loop, Malloc: %d, Free: %d\n", malloc_counter, free_counter);
+				}
+			}
+		}
 	}
+	
 
 	for(i = size_occupied-1; i >= 0; i--){
 		free(testarr[i]);
 		free_counter++;
 		if(DEBUG){
-			printf("freed\n");
+			printf("freed, free_counter: %d\n", free_counter);
 		}
 	}
-*/	
-	free(testarr[size_occupied]);
-	free_counter++;
+	
 	gettimeofday(&tv2, NULL);
 	time_taken = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 + (double) (tv2.tv_sec - tv1.tv_sec);
 
@@ -394,40 +400,16 @@ double workloadF(){
 	return time_taken;
 }
 
-void error_check(){
-	//char arr[5000];
-	/*
-	int x = 23456;
-	free((int *) &x);
-	*/
-
-	
-	void * p;
-	void * q;
-	p =  malloc (5000);
-	q = malloc(1);
-	printf("%p%p",p, q);
-	/*
-	int a = 10;
-	int * x = &a;
-	free(x);
-	*/
-
-
-
-
-}
-
 int main(){
-	error_check();
-	//Variable declarations
-	/*
+	//Variable declaration
+	
 	double time_A = 0;
 	double time_B = 0;
 	double time_C = 0;
 	double time_D = 0;
 	double time_E = 0;
 	double time_F = 0;
+	
 	int i = 0;
 	
 	for(; i < 100; i++){
@@ -446,7 +428,7 @@ int main(){
 		//Workload D
 		time_D += workloadD();
 		//printf("time_D: %f seconds \n", time_D);
-	
+
 		//Workload E
 		time_E += workloadE();
 		//printf("time_E: %f seconds\n", time_E);
@@ -456,13 +438,12 @@ int main(){
 		//printf("time_F: %f seconds\n", time_F);
 	}
 
-
 	printf("average time_A: %f seconds\n", time_A/100);
 	printf("average time_B: %f seconds\n", time_B/100);
 	printf("average time_C: %f seconds\n", time_C/100);
 	printf("average time_D: %f seconds\n", time_D/100);
 	printf("average time_E: %f seconds\n", time_E/100);
 	printf("average time_F: %f seconds\n", time_F/100);
-	*/
+	
 	return 0;
 }

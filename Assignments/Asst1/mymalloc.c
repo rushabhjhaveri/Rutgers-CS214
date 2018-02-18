@@ -144,7 +144,7 @@ void myfree (void * ptr, char * file, int line_no){
 
 	//Error check - if pointer passed to free is null
 	if(ptr == NULL){
-		fprintf(stderr, "In %s, line: %d, ERROR: Invalid Pointer.\n", file, line_no);
+	//	fprintf(stderr, "In %s, line: %d, nULL ERROR: Invalid Pointer.\n", file, line_no);
 		return;
 	}
 	
