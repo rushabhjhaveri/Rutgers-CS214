@@ -93,3 +93,19 @@ __Some Ways to Kill the Stack__
 * The other common error to be careful with is __buffer overflow__, i.e., when we write past the end of some variable, overwriting vital information.  
 
 ## Heap ##
+
+* The heap contains a linked list of used and free blocks. 
+* New allocations on the heap [by __new__ or __malloc()__] are satisfied by creating a suitable block from one of the free blocks. 
+* This requires updating the list of blocks on the heap. 
+* This meta information about the blocks on the heap is also stored on the heap, often in a small area just in front of every block. 
+* The size of the heap is set on application startup, but can grow [expand] as and when space is required [the allocator requests more space from the OS]. 
+* Stored in computer RAM, just like the stack. 
+* Variables on the heap must be destroyed manually and must never fall out of scope. The said data is freed using __delete, delete[], or free()__. 
+* In comparison to variables on the stack, the heap is slower to allocate. 
+* Used on demand to allocate a block of data for use by the program. 
+* Can have fragmentation when there are a lot of allocations and deallocations. 
+* Can have allocation failures if too big of a buffer is requested to be allocated. 
+* Use the heap when you don't know exactly how much data you will need at runtime, or if you need to allocate a lot of data. 
+* The heap is responsible for memory leaks. 
+
+### Memory Leaks ### 
