@@ -109,3 +109,20 @@ __Some Ways to Kill the Stack__
 * The heap is responsible for memory leaks. 
 
 ### Memory Leaks ### 
+
+A __memory leak__, in computer science [in such a context, aka a leakage], occurs when a computer program consumes memory, but is unable to release it back to the OS. 
+
+A memory leak has symptoms similar to a number of other problems and can generally only be diagnosed by a programmer with access to the program source code; however, many people refer to any unwanted increase in memory usage as a memory leak, though this is not strictly accurate.  
+
+A memory leak can diminish the performance of the computer by reducing the amount of available memory. 
+
+Eventually, in the worst case, too much of the available memory may become allocated, and all or part of the system or device stops working correctly, the application fails, or the system slows down unacceptably due to thrashing.  
+
+Memory leaks may not be serious or even detectable by normal means. In modern operating systems, normal memory used by an application is released when the application terminates. This means that a memory leak in a program that only runs for a short time may not be noticed and is rarely serious.  
+
+Typically, a memory leak occurs because dynamically allocated memory has become unreachable. The prevalence of memory leak bugs has led to the development of a number of debugging tools to detect unreachable memory.  
+
+”Conservative” garbage collection capabilities can be added to any programming language that lacks it as a built-in feature, and libraries for doing this are available for C and C++ programs. A conservative collector finds and reclaims most, but not all,
+unreachable memory.  
+
+
