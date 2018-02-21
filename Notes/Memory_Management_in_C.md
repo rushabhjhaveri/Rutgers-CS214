@@ -52,7 +52,7 @@ Salient features of the stack:
 * However, if the data needs to be preserved or kept in some form, then it must be copied from the stack before the function exits.
 * Thus, stack-based allocation is best for temporary data or data which is no longer required after the creating function exits.
 
-## Call Stack ##
+### Call Stack ###
 
 A call stack is composed of stack frames (aka activation records).
 
@@ -60,7 +60,7 @@ These are machine-dependent data structures containing subroutine state informat
 
 Each stack frame corrosponds to a call to a subroutine which has not terminated with a return.
 
-## Additional Information About the Stack ##
+### Additional Information About the Stack ###
 
 Noteworthy:
 * The OS allocates the stack for each system-level thread when the thread is created. Typically, the OS is called by the language runtime to allocate the heap for the application.
@@ -77,7 +77,7 @@ Noteworthy:
 * Use stack if you know exactly how much data you need to allocate before compile time, and make sure it is not too large.
 * The stack usually has a maximum size that is already determined when the program starts.
 
-## Stack Overflow ##
+### Stack Overflow ###
 
 Stack-based memory errors - bad bad bad! So bad!
 
@@ -86,3 +86,10 @@ When using heap-based memory, if you overshoot the bounds of the allocated block
 
 Variables created on the stack are always contiguous with each other. Writing out of bounds can change the value of another variable.
 
+If your program has stopped obeying the laws of logic, it's probably buffer overflow.  
+
+__Some Ways to Kill the Stack__ 
+* Blow the stack by simply using more memory than is available for this thread.  
+* The other common error to be careful with is __buffer overflow__, i.e., when we write past the end of some variable, overwriting vital information.  
+
+## Heap ##
