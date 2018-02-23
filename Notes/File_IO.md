@@ -58,3 +58,8 @@ By default, stdin and stdout are buffered. This means it minimizes expensive sys
 The stderr stream is reserved for sending error messages. It is [typically] directed towards the screen, and is unbuffered. 
 
 ## File Manipulation and IO Functions ## 
+__fopen()__: Opens a file for certain types of reading and writing. Returns a FILE pointer. 
+
+__fclose()__: Closes a file associated with the FILE * value passed to it. 
+
+__rewind()__: 
