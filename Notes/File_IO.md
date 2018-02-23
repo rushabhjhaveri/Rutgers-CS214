@@ -149,3 +149,67 @@ int fscanf(FILE *fp, const char *format, ...);
 These functions are generalizations of printf() and scanf() respectively. 
 
 ## Line [String] Input ## 
+Reading a line from a file: 
+```
+char *fgets(char *buf, int max, FILE *fp);
+```
+Returns after one of the following: 
+* Reads (at most) max-1 characters from the file.  
+* Reads a \n character.  
+* Reaches end-of-file.  
+* Encounters an error.   
+
+Return values: 
+* On success: pointer to buf. Note, fgets() automatically appends a \0
+to the end of the string.
+* On end-of-file: NULL. 
+* On error: NULL. 
+
+Use feof() or ferror() to determine if an error has occurred. 
+
+## Line [String] Output ## 
+Character strings may be written to file using 
+```
+int fputs(const char *str, FILE *fp);
+```
+Not actually line output. It does not automatically append a \n and consecutive calls may print strings on the same line. 
+
+Return values:
+On success: zero.
+On error: EOF.
+
+## Binary IO ## 
+When reading and writing binary files, may deal with objects directly without first converting them to character strings.  
+Direct binary IO provided by
+```
+size_t fread(void *ptr, size_t size, size_t nobj, FILE *fp);
+size_t fwrite(const void *ptr, size_t size, size_t nobj, FILE *fp);
+```
+Can pass objects of any type. 
+
+## Random File Operations ## 
+IO is not confined to sequential motion through a file. May also shift the file position back and forth to any specified location. 
+
+```
+long ftell(FILE *fp);
+int fseek(FILE *fp, long offset, int from);
+void rewind(FILE *fp);
+```
+Operate differently on text files as to binary files. 
+
+ftell() tells you where you are in the file. 
+
+fseek() moves the file pointer associated with the stream to a new location that is offset bytes from the origin. 
+
+Argument meaning:
+* stream_pointer is a pointer to the stream FILE structure
+of which the position indicator should be changed;
+* offset is a long integer which specifies the number of
+bytes from origin where the position indicator should be
+placed;
+* origin is an integer which specifies the origin position.
+  It can be:
+  * SEEK_SET: origin is the start of the stream
+  * SEEK_CUR: origin is the current position
+  * SEEK_END: origin is the end of the stream 
+  
