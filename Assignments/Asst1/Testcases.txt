@@ -1,0 +1,29 @@
+﻿Build a Better Malloc and Free
+_________________________________________________________________________________________________________________________________________________
+
+Hetal Patel - hp373
+Rushabh Jhaveri - rrj28
+Systems Programming, Spring 2018
+__________________________________________________________________________________________________________________________________________________
+
+
+Workload E
+___________________________________________________________________________________________________________________________________________________
+
+This workload generates a random number between 0, 1 and 2. 
+If the number is zero, malloc() would be implemented and it would allocate 
+random (even) number of bytes between 2 and 40. If the number is 1, free() would be implemented. 
+If it is 2, a for loop would be implemented which runs 50 times and it malloc() 1 bytes and free() immediately. 
+We included this workload to test whether malloc() and free() hold for uncertain random malloc() and free() along with fixed malloc() and free().
+
+___________________________________________________________________________________________________________________________________________________
+
+Workload F
+___________________________________________________________________________________________________________________________________________________
+
+This workload calls malloc() 50 times and allocates 5 bytes everytime. 
+After doing that, it randomly calls either malloc() or free() 100 times and allocates between 1 to 64 bytes. 
+It eventually free() all randomly malloced pointers. It calls free() again to free the 50 5-byte pointers malloced in the beginning. 
+We included this workload to test whether doing a fixed malloc() and then calling malloc() and free() randomly result in memory saturation.
+
+____________________________________________________________________________________________________________________________________________________
