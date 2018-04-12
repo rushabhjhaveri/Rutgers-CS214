@@ -1,0 +1,32 @@
+Globals 
+
+extern int h_errno
+	-  used by the name resolution functions to return error values. 
+	- in netdb.h
+
+int client_mode
+	- holds the client mode 
+
+Port 
+	- defined, hard-coded value
+
+max_buffer_size
+	- defined, hard-coded value
+
+hostent 
+	- structure that describes an internet host
+	- in netdb.h
+
+enum describing the various flags used in open
+- allows us to assign numbers to each flag, thereby allowing us to pass int arguments
+  when we use open. Very helpful!
+
+enum describing the different kinds of error messages
+	- flag error
+	- errno error
+	- host error 
+	- permi error
+
+Functions
+
+
