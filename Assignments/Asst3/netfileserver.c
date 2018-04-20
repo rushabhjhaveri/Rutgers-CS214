@@ -109,6 +109,9 @@ int addFileToList(struct filelist * ptr, int clientfd, int mode, int flag){
 struct filelist * lookup_file(char * filename, int node){
 	
 	/* Initially, curr and prev point to the same node. */
+	if(debug){
+		printf("0. In lookup_files, paramteres: filename: %s, node: %d\n", filename, node);
+	}
 	
 	struct filelist * curr = fL;
 	struct filelist * prev = curr;
@@ -133,7 +136,13 @@ struct filelist * lookup_file(char * filename, int node){
 	prev->filename = filename;
 	prev->nnode = node;
 	pthread_mutex_unlock(&list);
+	
+	if(debug){
+		printf("1. In look_up files, printing struct:\n");
+		printf("In addFiles, prev->filename: %d, prev->nnode: %d\n", prev->filename, prev->nnode);
 
+	}
+	
 	return prev; /* Return newly added node. */
 }
 
