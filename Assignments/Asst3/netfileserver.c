@@ -30,7 +30,7 @@ int addFileToList(struct filelist * ptr, int clientfd, int mode, int flag){
 	
 	if(debug){
 		printf("ADDING TO LIST...\n");
-		printf("parameters: clientfd: %d, mode: %d, flag: %d\n", clientfd, mode, flag)
+		printf("parameters: clientfd: %d, mode: %d, flag: %d\n", clientfd, mode, flag);
 	}
 	
 	pthread_mutex_lock(&list);
@@ -139,7 +139,7 @@ struct filelist * lookup_file(char * filename, int node){
 	
 	if(debug){
 		printf("1. In look_up files, printing struct:\n");
-		printf("In addFiles, prev->filename: %d, prev->nnode: %d\n", prev->filename, prev->nnode);
+		printf("In lookup_files, prev->filename: %s, prev->nnode: %d\n", prev->filename, prev->nnode);
 
 	}
 	
