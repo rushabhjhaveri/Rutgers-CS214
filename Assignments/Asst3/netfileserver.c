@@ -30,6 +30,7 @@ int addFileToList(struct filelist * ptr, int clientfd, int mode, int flag){
 	
 	if(debug){
 		printf("ADDING TO LIST...\n");
+		printf("parameters: clientfd: %d, mode: %d, flag: %d\n", clientfd, mode, flag)
 	}
 	
 	pthread_mutex_lock(&list);
@@ -55,6 +56,12 @@ int addFileToList(struct filelist * ptr, int clientfd, int mode, int flag){
 		}
 		fd = (curr->fd)[0];
 		pthread_mutex_unlock(&list);
+		
+		if(debug){
+			printf("In addFiles, printing struct when curr is empty:\n");
+			printf("In addFiles, curr->client: %d, curr->mode: %d, curr->flag: %d", curr->client, curr->mode, curr->flag);
+			printf("curr empty, fd: %d\n", fd);
+		}
 		return fd;
 	}
 	
@@ -82,6 +89,11 @@ int addFileToList(struct filelist * ptr, int clientfd, int mode, int flag){
 	
 	pthread_mutex_unlock(&list);
 	
+	if(debug){
+			printf("In addFiles, printing struct:\n");
+			printf("In addFiles, prev->client: %d, prev->mode: %d, prev->flag: %d", prev->client, prev->mode, prev->flag);
+			printf("return fd: %d\n", fd);
+		}
 	return fd;
 }
 
