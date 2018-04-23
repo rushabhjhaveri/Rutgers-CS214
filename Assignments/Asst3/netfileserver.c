@@ -18,6 +18,7 @@
 
 unsigned int debug = 1;
 
+
 /*
    Adds a file to list clientlist. 
 
@@ -156,9 +157,137 @@ int is_file(const char * path){
 	return 1;
 }
 
-int rdwr_conflict(char * filename, int mode, int flag, int clientfd, int rd){
+/*
+   For extension A.
 
-	return 0;
+   Checks for transfer mode conflicts, and also updates linked list.
+*/
+
+int rdwr_conflict(char * filename, int mode, int flag, int clientfd, int rd){
+	struct stat filestatus;
+	struct fdlist * filedescrips = fdL;
+	struct fdlist * candidate = 0;
+	struct filelist * curr = 0;
+	
+	int tempmode = 0;
+	int tempmode2 = 0;
+	int wr = 0; /* denotes write mode. */
+	int nnode;
+	int fd = 0; /* file descriptor returned by this function. */
+	int openfd; /* file descriptor returned on calling open() system call. */
+	
+	stat(filename, &filestatus); 
+	
+	/* st_ino is the file serial number. Distinguishes this file from all other files on the same device. */
+	nnode = filestatus.st_ino; 
+
+	pthread_mutex_lock(&lock);
+	if(fL == 0){
+		if(debug){
+			printf("In rdwr_conflict, Adding file to linked list.\n");
+		}
+		fL = calloc(1, sizeof(filelist));
+		fL->filename = filename;
+		fL->nnode = nnode;
+	}
+
+	curr = lookup_file(filename, nnode);
+	
+	/* Make variable assignments based on conditions. */
+	while(filedescrips != 0){
+		if(filedescrips->next == 0){
+			candidate = filedescrips;
+		}
+
+		if(filedescrips->nnode == nnode && filedescrips->mode == 0){
+			wr = 0;
+			tempmode = 1;
+			continue;
+		}
+
+		if(filedescrips->nnode == nnode && filedescrips->mode == 1 && filedescrips->filemode == O_RDONLY){
+			tempmode2 = 1;
+			continue;
+		}
+
+		if(filedescrips->nnode == nnode && filedescrips->mode == 1 && filedescrips->filemode != O_RDONLY){
+			wr = 1;
+			tempmode = 1;
+			continue;
+		}
+
+		if(filedescrips->nnode == nnode && filedescrips->mode == 2){
+			if(rd == 0){
+				fd = addFileToList(curr, clientfd, mode, flag);
+				pthread_mutex_unlock(&lock);
+				return fd;
+			}
+
+			pthread_mutex_unlock(&lock);
+			return -1;
+		}
+
+		filedescrips = filedescrips->next;
+	}
+
+	if((tempmode || tempmode2) && mode == 2){
+		if(rd == 0){
+			fd = addFileToList(curr, clientfd, mode, flag);
+			pthread_mutex_unlock(&lock);
+			return fd;
+		}
+
+		pthread_mutex_unlock(&lock);
+		return -1;
+	}
+
+	filedescrips = candidate;
+
+	if(rd == 0){
+		if((tempmode == 0) || (tempmode2 == 1 && wr == 1 && flag == O_RDONLY) || (tempmode2 == 1 && wr == 0) || filedescrips == 0){
+			errno = 0;
+			openfd = open(filename, flag) * (-5);
+			if(errno != 0 || openfd == -1){
+				pthread_mutex_unlock(&lock);
+				return -1;
+			}
+
+			if(filedescrips == 0){
+				fdL = calloc(1, sizeof(fdlist));
+				candidate = fdL;
+			}
+			else{
+				candidate->next = calloc(1, sizeof(filelist));
+				candidate = candidate->next;
+			}
+
+			candidate->filename = filename;
+			candidate->nnode = nnode;
+			candidate->mode = mode;
+			candidate->filemode = flag;
+			pthread_mutex_unlock(&lock);
+			candidate->fd = openfd;
+			return candidate->fd;
+		}
+		else{
+			fd = addFileToList(curr, clientfd, mode, flag);
+			pthread_mutex_unlock(&lock);
+			return fd;
+		}
+	}
+	else{
+		if((tempmode2 == 0) || (tempmode2 == 1 && wr == 1 && flag == O_RDONLY) || (tempmode2 == 1 && wr == 0) || filedescrips == 0){
+			pthread_mutex_unlock(&lock);
+			return 0;
+		}
+		else{
+			pthread_mutex_unlock(&lock);
+			return -1;
+		}
+	}
+	
+	pthread_mutex_unlock(&lock);
+	return -1;
 }
 
 /*
@@ -296,4 +425,102 @@ int openFile(int clientfd){
 	return retfd;
 }
 
-int main(int argc, char * argv[]){return 0;}
+/*
+   This is where the thread begins. 
+
+   Receives packet which is an int corrosponding to desired mode.
+*/
+void * start(void * c){
+	int client = *(int *) c;
+	int t;
+	int cmd = 0;
+	while(cmd < sizeof(t)){
+		cmd += recv(client, &t, sizeof(t), 0);
+		if(cmd == 0){
+			continue;
+		}
+	}
+	if(debug){
+		printf("In start, Request type: [%d]\n", t);
+	}
+	switch(t){
+		case 1: if(debug){printf("in case 1\n");}
+			openFile(client);
+			break;
+	}
+
+	close(client);
+	free(c);
+	return 0;
+}
+
+int main(){
+	
+	signal(SIGPIPE, SIG_IGN);
+	pthread_t threadid;
+	int sockfd;
+	int bind_socket;
+	int status;
+	int client;
+	int * c;
+	char ipstr[INET6_ADDRSTRLEN];
+	struct sockaddr_in serv_addr;
+	
+	/* Create socket. */
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	/*Exit upon socket creation failure. */
+	if(sockfd == -1){
+		fprintf(stderr, "ERROR: Could not open socket, please check connection.\n");
+		exit(1);
+	}
+
+	/* Make socket struct assignments. */
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(PORT);
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	socklen_t addrLen = sizeof(serv_addr);
+	
+	/* Bind sockaddr struct to socket. */
+	bind_socket = bind(sockfd, (struct sockaddr *) &serv_addr, addrLen);
+
+	/*Exit if bind fails. */
+	if(bind_socket == -1){
+		fprintf(stderr, "ERROR: Could not bind to socket.\n");
+		exit(0);
+	}
+
+	/* Initialize the mutex. */
+	if(pthread_mutex_init(&lock, NULL) != 0 || pthread_mutex_init(&list, NULL) != 0 || pthread_mutex_init(&sockets, NULL) != 0 || pthread_mutex_init(&conflict, NULL) != 0 || pthread_mutex_init(&conflict2, NULL) != 0){
+		fprintf(stderr, "ERROR: Mutex init failed.\n");
+		return 1;
+	}
+	
+	/* Initialize errno. */
+	errno = 0;
+	
+	/* Start listening. */
+	status = listen(sockfd, MAX_CLIENTS);
+
+	/* Return 0 if listen() fails. */
+	if(status == -1){
+		fprintf(stderr, "Listener error.\n");
+		return 0;
+	}
+
+	printf("Listening on port [%d]\n", PORT);
+	
+	/* Wait indefinitely until a connection is accepted. */
+	while(1){
+		client = accept(sockfd, (struct sockaddr *)&serv_addr, &addrLen);
+		c = (int *)calloc(1, sizeof(int));
+		*c = client;
+		
+		/* Client info. */
+		inet_ntop(AF_INET, &serv_addr.sin_addr, ipstr, sizeof(ipstr));
+		printf("Connection established with %s\n", ipstr);
+		pthread_create(&threadid, NULL, start, (void *)c);
+	}
+			
+	return 0;
+}

@@ -160,19 +160,24 @@ int netopen(const char * pathname, int flags){
 	return fd;
 }
 
-int main (int argc, char * argv[]){
-
+int main (){
+	/*
 	int net; 
 	net = netserverinit("factory.cs.rutgers.edu", 0);
 	if(DEBUG){
 		printf("0. In main, net: %d\n", net);
 	}
-
+	
 	int o_fd;
 	o_fd = netopen("file.txt", 0);
 	if(DEBUG){
 		printf("1. In main, netopen fd: %d\n", o_fd);
 	}
-	
+	*/
+	char * hostname = "localhost";
+	netserverinit(hostname, 1);
+	char * filename = "file.txt";
+	int fd = netopen(filename, 2);
+	printf("in libnet main, fd: [%d]\n", fd);
 	return 0;
 }
