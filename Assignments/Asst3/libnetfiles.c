@@ -511,6 +511,65 @@ ssize_t netread(int fildes, void * buf, size_t nbyte){
 	return recBytes;
 }
 
+void * netwriteHelper(void * msg){
+	struct decipherSocket * dS = (struct decipherSocket *) msg;
+	int error;
+	int senddata;
+	int retError;
+	int port = dS->port;
+	int clientfd = buildSocket(port);
+	size_t nbyte = dS->nbytes;
+	char * buffer = dS->buffer;
+	
+	errno = 0;
+
+	senddata = send(clientfd, buffer, nbyte, 0);
+
+	if(senddata == -1){
+		dS->error = ECONNRESET;
+		close(clientfd);
+		return 0;
+	}
+	
+	if(errno == SIGPIPE || errno != 0){
+		if(errno == SIGPIPE){
+			dS->error = ECONNRESET;
+			return 0;
+		}
+		else{
+			dS->error = errno;
+			return 0;
+		}
+	}
+
+	retError = 0;
+	while(retError < sizeof(error)){
+		retError += recv(clientfd, &error, sizeof(error), 0);
+		if(retError == 0){
+			dS->error = ECONNRESET;
+			close(clientfd);
+			return 0;
+		}
+	}
+
+	if(retError != sizeof(int)){
+		if(DEBUG){
+			printf("Error: Could not receive error.\n");
+		}
+		return 0;
+	}
+
+	if(error != 0){
+		errno = error;
+		printf("[%d] %s\n", error, strerror(errno));
+		close(clientfd);
+		return 0;
+	}
+
+	close(clientfd);
+
+	return 0;
+}
 ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 	int error = 0;
 	int recMsg = 0;
@@ -521,6 +580,8 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 	int sendtype;
 	int sendfd;
 	int sendnbytes;
+	int senddata;
+	int retError;
 	int i;
 	int div;
 	int isFirst;
@@ -542,7 +603,7 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 		return -1;
 	}
 
-	if(fildes >= 0 || filedes % 5 != 0 || buf == 0){
+	if(fildes >= 0 || fildes % 5 != 0 || buf == 0){
 		errno = EBADF;
 		return -1;
 	}
@@ -649,6 +710,55 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 		return recMsg;
 		
 	} /* End 4096. */
+
+	errno = 0;
+	senddata = send(sd, buf, nbyte, 0);
+	if(errno == SIGPIPE){
+		errno = ECONNRESET;
+	}
+	else if(senddata == -1){
+		return -1;
+	}
+
+	retError = 0;
+	while(retError < sizeof(error)){
+		retError += recv(sd, &error, sizeof(error), 0);
+		if(retError == 0){
+			errno = ECONNRESET;
+			close(sd);
+			return -1;
+		}
+	}
+
+	if(retError != sizeof(int)){
+		if(DEBUG){
+			printf("Error: Could not receive error.\n");
+		}
+		return -1;
+	}
+
+	if(error != 0){
+		errno = error;
+		printf("[%d] %s\n", error, strerror(errno));
+		close(sd);
+		return -1;
+	}
+
+	recBytes = 0;
+	while(recBytes < sizeof(recBytes)){
+		recBytes += recv(sd, &recMsg, sizeof(recMsg), 0);
+		if(recBytes == 0){
+			errno = ECONNRESET;
+			close(sd);
+			return -1;
+		}
+	}
+
+	if(error == -1){
+		recMsg = -1;
+	}
+	close(sd);
+	return recMsg;
 }
 
 int main (){
