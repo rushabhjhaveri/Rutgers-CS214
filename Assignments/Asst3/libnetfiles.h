@@ -12,6 +12,14 @@ extern int errno;
 struct hostent * host;
 struct sockaddr_in server;
 
+struct decipherSocket{
+	int port;
+	int read;
+	int error;
+	size_t nbytes;
+	char * buffer;
+} decipherSocket;
+
 int client_mode; 
 int sd;
 socklen_t serv_addrLen;

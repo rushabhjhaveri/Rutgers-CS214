@@ -44,7 +44,7 @@ struct filelist{
 struct socketlist{
 	int port;
 	int client;
-	//int part /* Wat iz dis  */
+	int part; /* Wat iz dis  */
 	int clientsocket;
 	int fd;
 	int nread;
