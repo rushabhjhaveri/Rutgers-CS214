@@ -18,6 +18,277 @@
 
 unsigned int debug = 1;
 
+void * writeFileHelper2(void * msg){
+	struct socketlist * sock = (struct socketlist *) msg;
+	int sd = sock->client;
+	struct sockaddr_in serv_addr = sock->server;
+	socklen_t addrLen = sock->serverLen;
+	char ipstr[INET6_ADDRSTRLEN];
+	int status = listen(sd, MAX_CLIENTS);
+
+	if (status == -1) {
+		if(debug) printf("In writehelper2, ERROR: Cannot listen\n");
+		return 0;
+	}
+
+	int isaccepted = accept(sd, (struct sockaddr *) &serv_addr, &addrLen);
+	inet_ntop(AF_INET, &serv_addr.sin_addr, ipstr, sizeof(ipstr));
+
+	if(isaccepted == -1){
+		if(debug) printf("In writehelper2, Cannot accept\n");
+		return 0;
+	}
+
+	errno = 0;
+	size_t nbytes = sock->nbytes;
+	char * readbuffer = sock->buffer;
+	char * buffer = readbuffer;
+	int readBytes = 0;
+
+	while(readBytes < nbytes){
+		int temp = 0;
+		temp = recv(isaccepted, buffer, nbytes, 0);
+		readBytes += temp;
+		buffer += temp;
+		if(temp == 0 && readBytes < nbytes){ break; }
+	}
+
+	int retError = send(isaccepted, &errno, sizeof(errno), 0);
+	if(retError == -1){
+		if(debug) printf("in writehelper2, Send error\n");
+	}
+	close(isaccepted);
+	return 0;
+
+}
+
+void writeFileHelper(int client, int fildes, size_t nbytes){
+	int i = 0;
+	int bindable = 0;
+	int isFirst = 0;
+	int readBytes = 0;
+	char * buffer;
+	size_t segment = 0;
+	int reader, writer, sendPorts;
+	int portsArr[MAX_SOCKETS];
+	bzero(portsArr, sizeof(portsArr));
+	pthread_t threadid[MAX_SOCKETS];
+	struct socketlist * sL[MAX_SOCKETS];
+	pthread_mutex_lock(&sockets);
+	if(debug){
+		printf("Ports: ");
+	}
+
+	for(i = 0; i < MAX_SOCKETS; i++){
+		if(bindable == MAX_STREAMS_PER_CLIENT){
+			break;
+		}
+
+		if(socketL[i].clientsocket == 0){
+			socketL[i].clientsocket = client;
+			socketL[i].part = bindable;
+			socketL[i].fd = fildes;
+			sL[bindable] = &socketL[i];
+			portsArr[bindable] = socketL[i].port;
+			bindable++;
+			if(debug){
+				printf("%d ", socketL[i].port);
+			}
+		}
+	}
+
+	if(debug){
+		printf("\n");
+	}
+
+	pthread_mutex_unlock(&sockets);
+
+	if(bindable == 0){
+		portsArr[0] = (-1)*(ECONNRESET);
+		send(client, &portsArr, sizeof(portsArr), 0);
+		if(debug){
+			printf("Cannot bind to any more sockets.\n");
+		}
+		return;
+	}
+
+	errno = 0;
+
+	isFirst = 1;
+	
+	for(i = 0; i < bindable; i++){
+		segment = nbytes / bindable;
+		if(isFirst){
+			segment += nbytes % bindable;
+			isFirst = 0;
+		}
+
+		buffer = calloc(1, segment);
+		sL[i]->buffer = buffer;
+		sL[i]->nbytes = segment;
+	}
+
+	if(errno != 0){
+		pthread_mutex_lock(&sockets);
+		for(i = 0; i < bindable; i++){
+			sL[i]->clientsocket = 0;
+		}
+		pthread_mutex_unlock(&sockets);
+		portsArr[0] = errno * (-1);
+		send(client, &portsArr, sizeof(portsArr), 0);
+		return;
+	}
+
+	sendPorts = send(client, &portsArr, sizeof(portsArr), 0);
+	if(sendPorts == -1){
+		if(debug){
+			printf("Error: Could not send.\n");
+		}
+		return;
+	}
+
+	for(i = 0; i < bindable; i++){
+		pthread_create(&threadid[i], NULL, writeFileHelper2, (void *) sL[i]);
+	}
+
+	for(i = 0; i < bindable; i++){
+		pthread_join(threadid[i], 0);
+	}
+
+	errno = 0;
+	reader = 0;
+	writer = 0;
+	
+	for(i = 0; i < bindable; i++){
+		reader = write(fildes, sL[i]->buffer, sL[i]->nbytes);
+		free(sL[i]->buffer);
+		if(reader == -1){
+			reader = errno * (-1);
+			writer = reader;
+			break;
+		}
+		writer += reader;
+	}
+
+	readBytes = send(client, &writer, sizeof(writer),0 );
+	if(readBytes < 0){
+		if(debug) printf("ERROR: Cannot send :( \n");
+		return;
+	}
+
+	pthread_mutex_lock(&sockets);
+	for(i = 0; i < bindable; i++){
+		close(sL[i]->clientsocket);
+		sL[i]->clientsocket = 0;
+	}
+	pthread_mutex_unlock(&sockets);
+	return;
+}
+
+
+int writeFile(int client){
+	char * buffer;
+	char * tempbuffer;
+	int fildes;
+	int error;
+	int reader;
+	int recfd;
+	int recnbytes;
+	int buffersize;
+	int temp;
+	size_t nbytes;
+	int retError, retBytes;
+
+	recfd = 0;
+	while(recfd < sizeof(int)){
+		recfd += recv(client, &fildes, sizeof(int), 0);
+		if(recfd == 0){
+			continue;
+		}
+	}
+
+	recnbytes = 0;
+	while(recnbytes < sizeof(ssize_t)){
+		recnbytes += recv(client, &nbytes, sizeof(ssize_t), 0);
+		if(recnbytes == 0){
+			continue;
+		}
+	}
+
+	if(nbytes > 4096){
+		if(fildes % 5 == 0){
+			fildes /= (-5);
+		}
+		else{
+			reader = -1;
+			if(debug){
+				printf("Do later.\n");
+			}
+		}
+
+		writeFileHelper(client, fildes, nbytes);
+		if(debug){
+			printf("Client [%d] done writing.\n", client);
+		}
+
+		return 0;
+	}
+
+	buffer = calloc(1, nbytes);
+	tempbuffer = buffer;
+	buffersize = 0;
+	while(buffersize < nbytes){
+		temp = 0;
+		temp = recv(client, tempbuffer, nbytes, 0);
+		buffersize += temp;
+		tempbuffer += temp;
+		if(temp == 0 && buffersize < nbytes){
+			return 0;
+		}
+	}
+
+	if(fildes % 10 == 0){
+		fildes /= (-5);
+		if(debug){
+			printf("fildes: %d\n", fildes);
+		}
+		reader = write(fildes, buffer, nbytes);
+		if(debug){
+			printf("Written Bytes: %d\n",reader);
+		}
+	}
+	else{
+		reader = -1;
+	}
+	
+	if(reader == -1){
+		error = errno;
+		if(error == 0){
+			error = -1;
+		}
+	}
+	else{
+		error = 0;
+	}
+
+	retError = send(client, &error, sizeof(error), 0);
+	if(reader == -1 || retError == -1){
+		free(buffer);
+		return -1;
+	}
+
+	retBytes = send(client, &reader, sizeof(reader), 0);
+
+	if(retBytes == -1){
+		if(debug){
+			printf("Sending error.\n");
+		}
+	}
+
+	free(buffer);
+	return 0;
+}
+
 
 void * readFileHelper2(void * sockList){
 	
@@ -745,6 +1016,9 @@ void * start(void * c){
 			break;
 		case 2: if(debug){printf("in case 2\n");}
 			readFile(client);
+			break;
+		case 3: if(debug){printf("In case 3\n");}
+			writeFile(client);
 			break;
 	}
 

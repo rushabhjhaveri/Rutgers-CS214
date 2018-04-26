@@ -614,6 +614,20 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 		printf("[%d] %s\n", errno, strerror(errno));
 		exit(0);
 	}
+	if(DEBUG){
+		printf("In netwrite, Socket creation successful.\n");
+		printf("In netwrite, cmd: [%d], fildes: [%d], nbyte: [%ld]\n", cmd, fildes, nbyte);
+	}
+
+	serv_addrLen = sizeof(server);
+	inet_ntop(AF_INET, &server.sin_addr, ip, sizeof(ip));
+	int isconnected = connect(sd, (struct sockaddr *)&server, serv_addrLen);
+
+	if(isconnected == -1){
+		errno = ETIMEDOUT;
+		printf("[%d] %s\n", errno, strerror(errno));
+		exit(1);
+	}
 
 	sendtype = send(sd, &cmd, sizeof(sendtype), 0);
 	sendfd = send(sd, &fildes, sizeof(fildes), 0);
@@ -621,6 +635,7 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 
 	if(sendtype == -1 || sendfd == -1 || sendnbytes == -1){
 		if(DEBUG){
+			printf("In netwrite, sendtype: [%d], sendfd: [%d], sendnbytes: [%d] \n", sendtype, sendfd, sendnbytes);
 			printf("Error: Could not send.\n");
 		}
 		close(sd);
@@ -777,16 +792,22 @@ int main (){
 	*/
 	char * hostname = "localhost";
 	netserverinit(hostname, 1);
-	char * filename = "netfileserver.c";
+	char * filename = "file.txt";
+	char * filename2 = "file2.txt";
 	int fd = netopen(filename, 2);
 	printf("in libnet main, fd: [%d]\n", fd);
+	int fd2 = netopen(filename2, 1);
+	printf("in libnet main, fd2: [%d]\n", fd2);
 	FILE * file = fopen(filename, "r");
 	fseek(file, 0L, SEEK_END);
 	int size = ftell(file);
 	printf("SIZE: %d\n", size);
 	char * txt = calloc(1, size);
 	printf("READ: %zd\n", netread(fd, txt, size));
-	//printf("BUFFER: %s\n", txt);
+	printf("Read BUFFER: %s\n", txt);
+	//printf("WRITE: %zd\n", netwrite(fd2, txt, size));
+	//printf("Write BUFFER: %s\n", txt);
+	printf("[%d] %s\n",errno,strerror(errno));
 	free(txt);
 	return 0;
 }
