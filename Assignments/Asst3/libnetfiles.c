@@ -14,9 +14,6 @@
 #include<arpa/inet.h>
 #include "libnetfiles.h"
 
-#ifndef max
-    #define max(a,b) ((a) > (b) ? (a) : (b))
-#endif
 
 /*
    NO DEBUG: 0
@@ -704,17 +701,65 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte){
 	return recMsg;
 }
 
-/*
+//attemps to close file on remote host.
 int netclose(int fildes){
-
+	if(client_mode == -1){
+		h_errno = HOST_NOT_FOUND;
+		return -1;
+	}
+	// remember to set errno
+	if(fildes >=0 || fildes % 5 != 0){
+		errno = EBADF;
+		return -1;
+	}
+	int fd = 0;
+	int cmd = 4;
+	// init server addr and client addr
+	sd = socket(AF_INET, SOCK_STREAM, 0);
+	if(sd < 0){
+		printf("[%d] %s\n",errno,strerror(errno));
+		exit(0);
+	}
+	serv_addrLen = sizeof(server);
+	inet_ntop(AF_INET, &server.sin_addr, ip, sizeof(ip));
+	int isConnected = connect(sd, (struct sockaddr *) &server, serv_addrLen);
+	
+	if(isConnected < 0){
+		errno = ETIMEDOUT;
+		printf("[%d] %s\n",errno,strerror(errno));
+		exit(1);
+	}
+	// send type
+	int sendtype = send(sd, &cmd, sizeof(sendtype), 0);
+	// send fdes
+	int sendfd = send(sd, &fildes, sizeof(fildes), 0);
+	//receive error first
+	if(sendtype == -1 || sendfd == -1){
+		printf("Sending error\n");
+		close(sd);
+		return -1;
+	}
+	int retError = 0;
+	while(retError < sizeof(fd)){
+		retError += recv(sd, &fd, sizeof(fd), 0);
+		if(retError == 0){
+			printf("NO DATA\n");
+			return -1;
+		}
+	}
+	if(fd != 0){
+		errno = fd;
+		fd = -1;
+	}
+	return fd;
 }
-*/
 int main (){
 	char * hostname = "localhost";
 	netserverinit(hostname,1);
 	
 	char * filename = "file.txt";
 	int fdd = netopen(filename,2);
+	
 	FILE * file = fopen(filename, "r");
 	fseek(file, 0L, SEEK_END);
 	int size = ftell(file);
@@ -723,18 +768,16 @@ int main (){
 	
 	char * filename2 = "file2.txt";
 	int fdd2 = netopen(filename2,2);
-	FILE * file2 = fopen(filename2, "r");
-	fseek(file2, 0L, SEEK_END);
-	int size2 = ftell(file2);
-	printf("SIZE2: %d\n",size2);
 	
 	
-	char * txt = calloc(1,max(size,size2));
+	char * txt = calloc(1,size);
 	printf("Read: %zd\n",netread(fdd,txt,size));
 	printf("Write: %zd\n",netwrite(fdd2,txt,size));
 	printf("[%d] %s\n",errno,strerror(errno));
-	//int fcc =  netclose(fdd);
-	//printf("Netclose %d\n[%d] %s\n",fcc,errno,strerror(errno));
+	
+	int fcc =  netclose(fdd);
+	printf("Netclose %d\n[%d] %s\n",fcc,errno,strerror(errno));
 	free(txt);
+	
 	return 0;
 }

@@ -6,6 +6,10 @@
 #define MAX_SOCKETS 5
 #define INVALID_FILE_MODE 500
 
+#define UNRESTRICTED 0
+#define EXCLUSIVE 1
+#define TRANSACTION 2
+
 extern int h_errno;
 extern int errno;
 

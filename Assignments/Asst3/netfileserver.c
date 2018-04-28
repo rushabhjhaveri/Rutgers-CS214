@@ -18,7 +18,6 @@
 
 unsigned int debug = 1;
 
-
 // this will get a socket for a thread to use for Ext B
 int getclients(struct socketlist * s, int port){
 	int sd;
@@ -689,16 +688,6 @@ int rw_conflict(char * filename, int mode, int flag, int client, int rd){
 	
 }
 
-// used as a debug to list open files.
-void listfiles(){
-	struct fdlist * curr = fdL;
-	printf("-------FILES-------\n");
-	for(;curr != NULL;curr = curr->next){
-		printf("FILE: %s\nTRANSFER MODE: %d\nFD: %d\nFILE MODE: %d\n\n",curr->filename,curr->mode,curr->fd,curr->filemode);
-	}
-	printf("-------------------\n");
-}
-
 //attemps to open a file.
 int openFile(int client){
 	char * path = calloc(1,256);
@@ -788,273 +777,126 @@ int openFile(int client){
 		printf("Error sending\n");
 		return -1;
 	}
-	//listfiles();
+
 	return fd;
 }
 
 
-/*
-   For extension A.
-
-   Checks for transfer mode conflicts, and also updates linked list.
-*/
-
-/*
-int rdwr_conflict(char * filename, int mode, int flag, int clientfd, int rd){
-	struct stat filestatus;
-	struct fdlist * filedescrips = fdL;
-	struct fdlist * candidate = 0;
-	struct filelist * curr = 0;
-	
-	int tempmode = 0;
-	int tempmode2 = 0;
-	int wr = 0; 
-	int nnode;
-	int fd = 0; 
-	int openfd; 
-	
-	stat(filename, &filestatus); 
-	
-	nnode = filestatus.st_ino; 
-
+// Deletes a node from the linked list when a file is closed.
+void deleteFileFromList(int pos){
+	struct fdlist * curr = fdL;
+	struct fdlist * prev = curr;
 	pthread_mutex_lock(&lock);
-	if(fL == 0){
-		if(debug){
-			printf("In rdwr_conflict, Adding file to linked list.\n");
-		}
-		fL = calloc(1, sizeof(filelist));
-		fL->filename = filename;
-		fL->nnode = nnode;
-	}
-
-	curr = lookup_file(filename, nnode);
-	
-	
-	while(filedescrips != 0){
-		if(filedescrips->next == 0){
-			candidate = filedescrips;
-		}
-
-		if(filedescrips->nnode == nnode && filedescrips->mode == 0){
-			wr = 0;
-			tempmode = 1;
-			continue;
-		}
-
-		if(filedescrips->nnode == nnode && filedescrips->mode == 1 && filedescrips->filemode == O_RDONLY){
-			tempmode2 = 1;
-			continue;
-		}
-
-		if(filedescrips->nnode == nnode && filedescrips->mode == 1 && filedescrips->filemode != O_RDONLY){
-			wr = 1;
-			tempmode = 1;
-			continue;
-		}
-
-		if(filedescrips->nnode == nnode && filedescrips->mode == 2){
-			if(rd == 0){
-				fd = addFileToList(curr, clientfd, mode, flag);
-				pthread_mutex_unlock(&lock);
-				return fd;
-			}
-
-			pthread_mutex_unlock(&lock);
-			return -1;
-		}
-
-		filedescrips = filedescrips->next;
-	}
-
-	if((tempmode || tempmode2) && mode == 2){
-		if(rd == 0){
-			fd = addFileToList(curr, clientfd, mode, flag);
-			pthread_mutex_unlock(&lock);
-			return fd;
-		}
-
+	if(curr != NULL && curr->fd == pos){
+		fdL = curr->next;
+		free(curr);
 		pthread_mutex_unlock(&lock);
-		return -1;
+		return;
 	}
 
-	filedescrips = candidate;
-
-	if(rd == 0){
-		if((tempmode == 0) || (tempmode2 == 1 && wr == 1 && flag == O_RDONLY) || (tempmode2 == 1 && wr == 0) || filedescrips == 0){
-			errno = 0;
-			openfd = open(filename, flag) * (-5);
-			if(errno != 0 || openfd == -1){
-				pthread_mutex_unlock(&lock);
-				return -1;
-			}
-
-			if(filedescrips == 0){
-				fdL = calloc(1, sizeof(fdlist));
-				candidate = fdL;
-			}
-			else{
-				candidate->next = calloc(1, sizeof(filelist));
-				candidate = candidate->next;
-			}
-
-			candidate->filename = filename;
-			candidate->nnode = nnode;
-			candidate->mode = mode;
-			candidate->filemode = flag;
-			pthread_mutex_unlock(&lock);
-			candidate->fd = openfd;
-			return candidate->fd;
-		}
-		else{
-			fd = addFileToList(curr, clientfd, mode, flag);
-			pthread_mutex_unlock(&lock);
-			return fd;
-		}
+	while(curr != NULL && curr->fd != pos){
+		prev = curr;
+		curr = curr->next;
 	}
-	else{
-		if((tempmode2 == 0) || (tempmode2 == 1 && wr == 1 && flag == O_RDONLY) || (tempmode2 == 1 && wr == 0) || filedescrips == 0){
-			pthread_mutex_unlock(&lock);
-			return 0;
-		}
-		else{
-			pthread_mutex_unlock(&lock);
-			return -1;
-		}
+
+	if(curr == NULL){
+		pthread_mutex_unlock(&lock);
+		return;
 	}
-	
+
+	prev->next = curr->next;
 	pthread_mutex_unlock(&lock);
-	return -1;
+	free(curr);
+	return;
 }
 
+// This is the close method. IT closes the file, or attemps to.
+int closeFile(int client){
+	int fd;
+	char * filename = 0;
+	int error = 0;
+	int reader;
 
-int openFile(int clientfd){
-
-	char * path = calloc(1, 256);
-	int flags;
-	int mode;
-	int error;
-	int conflict_mode;
-	int retfd;
-	int recmode;
-	int recflags;
-	int recpath;
-	int temp;
-
-	
-	recmode = 0;
-	while(recmode < sizeof(int)){
-		recmode += recv(clientfd, &mode, sizeof(int), 0);
-		if(recmode == 0){
+	int recfd = 0;
+	// receive fd to close
+	while(recfd < sizeof(int)){
+		recfd += recv(client, &fd, sizeof(int), 0);
+		if(recfd == 0){
 			continue;
 		}
 	}
-	
-	
-	recflags = 0;
-	while(recflags < sizeof(int)){
-		recflags += recv(clientfd, &flags, sizeof(int), 0);
-		if(recflags == 0){
-			continue;
+	struct fdlist * curr = fdL;
+	for(;curr != NULL;curr = curr->next){
+		if(curr->fd == fd){
+			filename = curr->filename;
 		}
 	}
-	
-	
-	recpath = 0;
-	while(recflags < 256){
-		temp = 0;
-		temp = recv(clientfd, path, 256, 0);
-		recflags += temp;
-		if(temp == 0){
-			continue;
-		}
-	}
-	
-	if(debug){
-		printf("0. In openFile, recmode: %d, recflags: %d, recpath: %d\n", recmode, recflags, recpath);
-	}
-
-	if(is_file(path)){
-
-		if(debug) printf("\n\nIn is_file loop\n\n");
-		errno = 0;
-		pthread_mutex_lock(&conflict);
-		conflict_mode = rdwr_conflict(path, mode, flags, clientfd, 0);
-		pthread_mutex_unlock(&conflict);
-		
-		if(errno){
-			error = errno;
-			printf("[%d] %s\n", errno, strerror(errno));
-			retfd = -1;
-		}
-		if(conflict_mode > 0 && errno == 0){
-			if(debug) printf("\n\nIn conflict loop\n\n");
-			while(1){
-				int isconflict = 0;
-				if(debug){
-					printf("1. In openFile, extensionA loop, conflict: %d\n", conflict_mode);
-				}
-				read(conflict_mode, &isconflict, sizeof(isconflict));
-				if(isconflict == -1){
-					//printf("TIMEOUT\n");
-					retfd = -1;
-					errno = EWOULDBLOCK;
-					send(clientfd, &retfd, sizeof(retfd), 0);
-					send(clientfd, &errno, sizeof(errno),0);
-					return errno;
-				}
-
-				if(debug){
-					printf("isconflict: %d\n", isconflict);
-				}
-				pthread_mutex_lock(&conflict2);
-				conflict_mode = rdwr_conflict(path, mode, flags, clientfd, 0);
-				if(debug){
-					printf("isconflict = %d\n", isconflict);
-				}
-				pthread_mutex_unlock(&conflict2);
-
-				if(conflict_mode <= 0){
-					retfd = conflict_mode;
-					break;
-				}
-			} // while(1) loop
-		} // if(conflict > 0 && errno == 0) loop
-		else {
-			if(retfd == -1){
-				error = errno;
-			}
-			else {
-				retfd = conflict_mode;
-			}
-		}
-	} //if_file
-	else {
-		retfd = -1;
-		error = errno;
-	}
-
-
-	if(debug){
-		printf("2. In openFlags, flags: %d, mode: %d, filename: %s\n", flags, mode, path); 
-	}
-
-	int retnbytes = send(clientfd, &retfd, sizeof(retfd), 0);
-	int retnerror = send(clientfd, &error, sizeof(error), 0);
-	if(debug){
-		printf("3. In openFlags, retnbytes: %d, retnerror: %d\n", retnbytes, retnerror);
-	}
-	if(retnbytes == -1 || retnerror == -1){
-		printf("ERROR: Send not successful\n");
+	if(filename == 0){
+		printf("No file\n");
+		error = EBADF;
+		send(client, &error, sizeof(error), 0);
 		return -1;
 	}
-
-	if(debug){
-		printf("4. In openFlags, retfd: %d, error: %d\n", retfd, error);
+	//close FD and delete node. prob need mutex
+	if(fd % 5 == 0){
+		fd /= -5;
+		printf("FD: %d\n",fd);
+		reader = close(fd);
+		if(reader != -1){
+			int tempfd = fd * -5;
+			deleteFileFromList(tempfd);
+		}
+	} else{
+		reader = -1;
 	}
-
-	return retfd;
+	if(reader == -1){
+		error = errno;
+		if(error == 0){
+			error = -1;
+		}
+	} else{
+		struct stat filestat; 
+		stat (filename, &filestat);  
+		int nnode = filestat.st_ino;
+		struct filelist * ptr = lookup_file(filename, nnode);
+		pthread_mutex_lock(&list);
+		struct clientlist * cl_curr = ptr->list;
+		struct clientlist * cl_prev = ptr->list;
+		if(cl_curr == 0){
+			printf("NO QUEUE\n");
+		}
+		pthread_mutex_unlock(&list);
+		for(;cl_curr != NULL;cl_curr = cl_curr->next){
+			pthread_mutex_lock(&conflict);
+			int isConflict = rw_conflict(filename,cl_curr->mode,cl_curr->flag,0,1);
+			pthread_mutex_unlock(&conflict);
+			pthread_mutex_lock(&list);
+			if(isConflict == 0){
+				fd = (cl_curr->fd)[1];
+				printf("WRITING TO %d\n",fd);
+				write(fd,&isConflict,sizeof(isConflict));
+				if(ptr->list == cl_curr){
+					ptr->list = cl_curr->next;
+				} else{
+					cl_prev->next = cl_curr->next;
+				}
+				free(cl_curr);
+			}
+			pthread_mutex_unlock(&list);
+			cl_prev = cl_curr;
+		}
+	}
+	// send error
+	int retError = send(client, &error, sizeof(error), 0);
+	if(retError < 0){
+		printf("Sending error\n");
+		return 0;
+	}
+	return error;
 }
-*/
+
+
+
 /*
    This is where the thread begins. 
 
@@ -1074,14 +916,17 @@ void * start(void * c){
 		printf("In start, Request type: [%d]\n", t);
 	}
 	switch(t){
-		case 1: if(debug) printf("in case 1\n");
+		case 1: if(debug) printf("in case 1: OPENING FILE\n");
 			openFile(client);
 			break;
-		case 2: if(debug) printf("in case 2\n");
+		case 2: if(debug) printf("in case 2: READING FILE\n");
 			readFile(client);
 			break;
-		case 3: if(debug) printf("In case 3\n");
+		case 3: if(debug) printf("In case 3: WRITING TO FILE\n");
 			writeFile(client);
+			break;
+		case 4: if(debug) printf("In case 4: CLOSING FILE\n");
+			closeFile(client);
 			break;
 	}
 
