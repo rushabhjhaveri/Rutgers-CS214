@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<math.h>
 #include<ctype.h>
 #include<netdb.h>
 #include<pthread.h>
@@ -12,6 +13,11 @@
 #include<sys/socket.h>
 #include<arpa/inet.h>
 #include "libnetfiles.h"
+
+#ifndef max
+    #define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
 /*
    NO DEBUG: 0
    DEBUG: 1
@@ -20,6 +26,25 @@ unsigned int DEBUG = 1;
 
 
 //Return 0 if successful :)
+
+/*
+   In essence, netserverinit initializes the server. 
+
+   Parameters: hostname and filemode [implemented for extension A].
+
+   netserverinit checks if the filemode is valid, 
+   else throws an invalid filemode error and returns failure.
+
+   gethostbyname(const char * name) returns a hostent structure for the given 
+   host name.
+
+   If the hostname is valid and successfully retrieved, the global hostent
+   structure gets populated. 
+   Else, if null, a host not found error is thrown, and return failure.
+
+   netserverinit returns 0 on success, -1 on failure / error, and sets 
+   h_errno appropriately. 
+*/
 int netserverinit(char * hostname, int filemode){
 	
 	if(DEBUG){
@@ -40,7 +65,6 @@ int netserverinit(char * hostname, int filemode){
 	server.sin_family = AF_INET;
 	server.sin_port = htons(PORT);
 	
-	//check if hostname is valid
 	if(gethostbyname(hostname) == NULL){
 		h_errno = HOST_NOT_FOUND;
 		printf("ERROR: Host not found.\n");
@@ -58,110 +82,121 @@ int netserverinit(char * hostname, int filemode){
 	return 0;
 }
 
-int netopen(const char * pathname, int flags){
-	
-	int fd = -1;
-	char filename[256];
-	int error;
-	int type = 1;
-	int isconnected;
-	int type2;
-	int mode;
-	int o_flags;
-	int o_path;
-	int retnbytes;
-	int retnerror;
+/*
+   netopen(const char * filename, int flags)
+   takes a filepath and flags, wherein free includes one of the
+   following access modes: 
+   	- O_RDONLY [read-only]
+	- O_WRONLY [write-only]
+	- O_RDWR [read-write]
+   
+   If the file was successfully opened, netopen() returns a new file descriptor,
+   else, returns -1 and sets errno appropriately.
 
-	if(DEBUG){
-		printf("0. In netopen, paramters: %s [%d]\n", pathname, flags);
-	}
+*/
+int netopen(const char * pathname,int flags){
+	
+	/*
+	   Check if flags are valid.
+	   Set h_errno and return failure.
+	*/
 	if(flags < 0 || flags > 2){
 		h_errno = INVALID_FILE_MODE;
-		printf("ERROR: Invalid open flag.\n");
+		printf("Invalid flags.\n");
 		return -1;
 	}
 
+	// Return failure if client_mode has been set to -1.
 	if(client_mode == -1){
 		h_errno = HOST_NOT_FOUND;
 		return -1;
 	}
-	
-	bzero(filename, 256);
-	strcpy(filename, pathname);
-	if(DEBUG){
-		printf("1. In netopen, filename: %s\n", filename) ;
-	}
-
+	char filename[256];
+	bzero(filename,256);
+	int fd;
+	int error;
+	int cmd = 1;
+	strcpy(filename,pathname);
+	// Create socket.
 	sd = socket(AF_INET, SOCK_STREAM, 0);
-	if(sd == -1){
-		printf("[%d] %s\n", errno, strerror(errno));
+
+	// Print errno error and exit if socket creation failed.
+	if(sd < 0){
+		printf("[%d] %s\n",errno,strerror(errno));
 		exit(0);
 	}
-
 	serv_addrLen = sizeof(server);
 	inet_ntop(AF_INET, &server.sin_addr, ip, sizeof(ip));
-	isconnected = connect(sd, (struct sockaddr *)&server, serv_addrLen);
-	if(DEBUG){
-		printf("2. In netopen, socket connnecting...........\n");
-	}
-	if(isconnected == -1){
+
+	// Connect to remote fileserver.
+	int isConnected = connect(sd, (struct sockaddr *) &server, serv_addrLen);
+	
+	// Print errno error and exit if connection failed.
+	if(isConnected < 0){
 		errno = ETIMEDOUT;
-		printf("[%d] %s\n", errno, strerror(errno));
+		printf("[%d] %s\n",errno,strerror(errno));
 		exit(1);
 	}
-
-	if(DEBUG){
-		printf("3. In netopen, socket connected and isconnected: %d\n", isconnected);
-	}
-	type2 = send(sd, &type, sizeof(type2), 0);
-	mode = send(sd, &mode, sizeof(mode), 0);
-	o_flags = send(sd, &o_flags, sizeof(flags), 0);
-	o_path = send(sd, filename, 256, 0);
-	if(type2==-1 || mode == -1 || o_flags == -1 ||o_path == -1){
-		printf("ERROR: Message cannot be sent\n");
+	// Send command.
+	int sendtype = send(sd, &cmd, sizeof(sendtype), 0);
+	// Send client mode.
+	int sendmode = send(sd, &client_mode, sizeof(client_mode), 0);
+	// Send open flags
+	int sendflags = send(sd, &flags, sizeof(flags), 0);
+	// Send filepath.
+	int sendpath = send(sd, filename, 256, 0);
+	
+	// Throw error, close socket, and exit, if any sends failed.
+	if(sendtype == -1 || sendmode == -1 || sendflags == -1 || sendpath == -1){
+		printf("Sending error\n");
 		close(sd);
 		return -1;
 	}
-
-	if(DEBUG){
-		printf("4. In netopen, type2: %d, mode: %d, o_flags: %d, o_path: %d\n", type2, mode, o_flags, o_path);
-	}
-	retnbytes = 0;
-	while(retnbytes < sizeof(fd)){
-		retnbytes += recv(sd, &fd, sizeof(fd), 0);
-		if(retnbytes == 0){
-			printf("ERROR: No data received\n");
+	
+	// Receive file descriptor returned by server.
+	int retBytes = 0;
+	while(retBytes < sizeof(fd)){
+		retBytes += recv(sd, &fd, sizeof(fd), 0);
+		if(retBytes == 0){
+			printf("NO DATA\n");
 			close(sd);
 			return -1;
 		}
 	}
 
-	retnerror = 0;
-	while(retnerror < sizeof(error)){
-		retnerror += recv(sd, &error, sizeof(error), 0);
-		if(retnerror == 0){
-			printf("ERROR: No data received\n");
+	// Receive error.
+	int retError = 0;
+	while(retError < sizeof(error)){
+		retError += recv(sd, &error, sizeof(error), 0);
+		if(retError == 0){
+			printf("NO DATA\n");
 			close(sd);
 			return -1;
 		}
 	}
 
-	if(DEBUG){
-		printf("5. In netopen, \nretnbytes: %d, fd: %d \nretnerror: %d, error: %d\n", retnbytes, fd, retnerror, error);
-	}
-
+	printf("In, netopen, retBytes: %d, retError: %d\n", retBytes, retError);
+	
+	// If fd == -1, open failed; throw errno error.
 	if(fd == -1){
 		errno = error;
-		printf("[%d] %s\n", fd, strerror(errno));
+		printf("[%d] %s\n",fd,strerror(errno));
 	}
 
-	if(DEBUG){
-		printf("6. In netopen, returning fd value: %d\n", fd);
-	}
+	// Close the socket connection.
 	close(sd);
+
+	// Return the filedescriptor.
 	return fd;
 }
 
+/*
+   Helper function to make a socket, given a port number.
+
+   It creates and binds the socket to the given port.
+
+   Returns socket descriptor on success, throws errno error and exits on failure.
+*/
 int buildSocket(int portNum){
 	
 	struct sockaddr_in serv_addr;
@@ -193,78 +228,66 @@ int buildSocket(int portNum){
 	return sd;
 }
 
-void * netreadHelper (void * msg){
-	
-	struct decipherSocket * dS = (struct decipherSocket *) msg;
-	int portNum;
-	int client;
-	size_t nbytes;
-	char * buffer;
+void * netreadHelper(void * s){
+	struct decipherSocket * msg = (struct decipherSocket *) s;
+	int portNum = msg->port;
+	int client = buildSocket(portNum);
+	size_t nbyte = msg->nbytes;
+	char * buffer = msg->buffer;
 	int error;
+	int recMsg;
+
+	//receive error first
 	int retError = 0;
-	int recMsg = 0;
-	int recBytes = 0;
-	int retBytes = 0;
-
-	portNum = dS->port;
-	client = buildSocket(portNum);
-	nbytes = dS->nbytes;
-	buffer = dS->buffer;
-
 	while(retError < sizeof(error)){
 		retError += recv(client, &error, sizeof(error), 0);
 		if(retError == 0){
-			dS->error = ECONNRESET;
+			msg->error = ECONNRESET;
 			close(sd);
 			return 0;
 		}
 	}
-
 	if(retError != sizeof(int)){
-		if(DEBUG) printf("ERROR: Cannot send\n");
+		printf("Could not receive error!\n");
 		return 0;
 	}
-
-	if(error != 0) {
+	if(error != 0){
 		errno = error;
-		printf("[%d] %s\n", error, strerror(errno));
+		printf("[%d] %s\n",error,strerror(errno));
 		close(client);
 		return 0;
 	}
-
+	// received byte number
+	int recBytes = 0;
 	while(recBytes < sizeof(recBytes)){
 		recBytes += recv(client, &recMsg, sizeof(recMsg), 0);
 		if(recBytes == 0){
-			dS->error = ECONNRESET;
+			msg->error = ECONNRESET;
 			close(client);
 			return 0;
 		}
 	}
-
-	dS->read = recMsg;
+	msg->read = recMsg;
+	int retnBytes = 0;
 	errno = 0;
-
-	while(retBytes < nbytes){
+	while(retnBytes < nbyte){
 		int temp;
 		errno = 0;
-		temp = recv(client, buffer, nbytes, 0);
-		if(temp == 0 && retBytes < nbytes) {
-			dS->error = ECONNRESET;
+		temp = recv(client, buffer, nbyte, 0);
+		if(temp == 0 && retnBytes < nbyte){
+			msg->error = ECONNRESET;
 			close(client);
 			return 0;
-		}
-		else if (temp == -1) {
-			dS->error = errno;
+		} else if(temp == -1){
+			msg->error = errno;
 			close(client);
 			return 0;
 		}
 		buffer += temp;
-		retBytes += temp;
+		retnBytes += temp;
 	}
-
-	if(DEBUG) printf("In netreadHelper, buff receieved! retBytes: %d, nbytes: %zd\n", retBytes, nbytes);
-
-	if(error == -1) {
+	printf("Received: %d/%zd\n",retnBytes,nbyte);
+	if(error == -1){
 		recBytes = -1;
 	}
 	close(client);
@@ -272,379 +295,79 @@ void * netreadHelper (void * msg){
 }
 
 /*
-   Read n bytes from remote fileserver.
+   netread() reads the file referred to by fildes. 
 
-   Returns number of bytes actually read upon success.
-
-   Returns -1 and sets errno in case of failure.
+   Returns the number of bytes actually read on success.
+   Else, returns -1 and sets errno.
 */
-ssize_t netread(int fildes, void * buf, size_t nbyte){
-	
-	int error;
-	int portArr[MAX_SOCKETS];
-	int isconnected;
-	int reader;
-	int sendcmd;
-	int sendfd;
-	int sendnbytes;
-	int recBytes;
-	int recPorts;
-	int recError;
-	int retBytes;
-	int retNBytes;
-	int temp;
-	int i;
-	int div;
-	int isFirst;
-	int cmd = 2;
-	size_t segment;
-	char * tempbuffer;
-	pthread_t threadid[MAX_SOCKETS];
-	struct decipherSocket dS[MAX_SOCKETS];
-	
-	/*
-	   Ignores the signal SIGPIPE.
-	   Passing SIG_IGN as handler ignores a given signal, with exceptions:
-	   	- SIGKILL
-		- SIGSTOP
-	   which cannot be caught or ignored.
-	*/
+ssize_t netread(int fildes, void *buf, size_t nbyte){
 	signal(SIGPIPE, SIG_IGN);
-	
-	/* Set errno. */
+	// Sets h_errno and returns -1 if clientmode is invalid.
 	if(client_mode == -1){
 		h_errno = HOST_NOT_FOUND;
 		return -1;
-	}
-	else if((int) nbyte < 0){
+	} else if((int)nbyte < 0){ // if number of bytes to be read is negative.
+		// Set errno to invalid argument.
 		errno = EINVAL;
+
+		// Return -1 for failure.
 		return -1;
 	}
+	/* 
+	   Check if invalid filedescriptor or buffer.
 
-	if(fildes >= 0 || fildes % 5 != 0 || buf == 0){
+	   Set errno to bad file descriptor and
+	   return -1 for failure.
+	*/
+	if(fildes >=0 || fildes % 5 != 0 || buf == 0){
 		errno = EBADF;
 		return -1;
 	}
-
-	/* Initialize server and client sockets. */
+	int error;
+	int recMsg;
+	int portsArr[MAX_SOCKETS];
+	pthread_t threadid[MAX_SOCKETS];
+	struct decipherSocket msg[MAX_SOCKETS];
+	int cmd = 2;
+	// Create socket.
 	sd = socket(AF_INET, SOCK_STREAM, 0);
 
-	/* Set errno, print error, and exit if socket creation failed. */
-	if(sd == -1){
-		printf("[%d] %s\n", errno, strerror(errno));
+	// Print errno and exit if socket creation fails.
+	if(sd < 0){
+		printf("[%d] %s\n",errno,strerror(errno));
 		exit(0);
 	}
-
 	serv_addrLen = sizeof(server);
+	inet_ntop(AF_INET, &server.sin_addr, ip, sizeof ip);
 
-	inet_ntop(AF_INET, &server.sin_addr, ip, sizeof(ip));
+	// Establish connection to remote fileserver.
+	int status = connect(sd, (struct sockaddr *) &server, serv_addrLen);
 
-	isconnected = connect(sd, (struct sockaddr *) &server, serv_addrLen);
-
-	/* Set errno, print error, and exit if connect failed. */
-	if(isconnected == -1){
+	// Print errno and exit if connection fails.
+	if(status < 0){
 		errno = ETIMEDOUT;
-		printf("[%d] %s\n", errno, strerror(errno));
+		printf("[%d] %s\n",errno,strerror(errno));
 		exit(1);
 	}
+	// Send command.
+	int sendtype = send(sd, &cmd, sizeof(sendtype), 0);
+	// Send fildes.
+	int sendfd = send(sd, &fildes, sizeof(fildes), 0);
+	//Send nbytes.
+	int sendnbyte = send(sd, &nbyte, sizeof(nbyte), 0);
 
-	/* Send command type. */
-	sendcmd = send(sd, &cmd, sizeof(sendcmd), 0);
-
-	/*Send fildes. */
-	sendfd = send(sd, &fildes, sizeof(fildes), 0);
-
-	/* Send nbytes. */
-	sendnbytes = send(sd, &nbyte, sizeof(nbyte), 0);
-
-	/* Check if any of the sends failed. Throw error, close socket, return -1. */
-	if(sendcmd == -1 || sendfd == -1 || sendnbytes == -1){
-		if(DEBUG){
-			printf("In netread, sending error. \n");
-		}
+	// Throw error, close socket and return -1 if any send fails.
+	if(sendtype == -1 || sendfd == -1 || sendnbyte == -1){
+		printf("Sending error\n");
 		close(sd);
 		return -1;
 	}
-
-	/* If nbyte > 4096, receive ports first. */
-	recPorts = 0;
-	temp = 0;
-	if(nbyte > 4096){
-		while(recPorts < sizeof(portArr)){
-			temp = recv(sd, &portArr+temp, sizeof(portArr), 0);
-			recPorts += temp;
-			if(recPorts == 0){
-				errno = ECONNRESET;
-				close(sd);
-				return -1;
-			}
-		}
-		i= 0;
-		div = 0;
-		if(DEBUG){
-			printf("Ports: ");
-		}
-
-		for(i = 0; i < MAX_SOCKETS; i++){
-			if(portArr[i] > 0){
-				if(DEBUG){
-					printf("[%d] ", portArr[i]);
-				}
-				dS[i].port = portArr[i];
-				div++;
-			}
-			else if(portArr[i] < 0){
-				errno = portArr[i] * (-1);
-				printf("[%d] %s\n", errno, strerror(errno));
-				return -1;
-			}
-		}
-		if(DEBUG){
-			printf("\n");
-		}
-
-		isFirst = 1;
-		for(i = 0; i < div; i++){
-			segment = nbyte/div;
-			if(isFirst){
-				segment += nbyte % div;
-				isFirst = 0;
-			}
-
-			dS[i].error = 0;
-			dS[i].buffer = calloc(1, segment);
-			dS[i].nbytes = segment;
-		}
-
-		for(i = 0; i < div; i++){
-			pthread_create(&threadid[i], NULL, netreadHelper, (void *)&dS[i]);
-		}
-
-		for(i = 0; i < div; i++){
-			if(threadid[i] != 0){
-				pthread_join(threadid[i], 0);
-			}
-		}
-
-		reader = 0;
-		tempbuffer = buf;
-		for(i = 0; i < div; i++){
-			if(threadid[i] != 0){
-				if(dS[i].error != 0){
-					errno = dS[i].error;
-					return -1;
-				}
-
-				reader += dS[i].read;
-				memcpy(tempbuffer, dS[i].buffer, dS[i].nbytes);
-				free(dS[i].buffer);
-				tempbuffer += dS[i].nbytes;
-			}
-		}
-
-		return reader;
-	} //if 4096
-
-	/* Receive error. */
-	recError = 0;
-	while(recError < sizeof(error)){
-		recError += recv(sd, &error, sizeof(error), 0);
-		if(recError == 0){
-			errno = ECONNRESET;
-			close(sd);
-			return -1;
-		}
-	}
-
-	if(recError != sizeof(int)){
-		if(DEBUG){
-			printf("In netread, error could not be received.\n");
-		}
-		return -1;
-	}
-
-	if(error != 0){
-		errno = error;
-		printf("[%d] %s\n", error, strerror(errno));
-		close(sd);
-		return -1;
-	}
-	
-	/* Receive number of bytes. */
-	retBytes = 0;
-	while(retBytes < sizeof(retBytes)){
-		retBytes += recv(sd, &recBytes, sizeof(recBytes), 0);
-		if(retBytes == 0){
-			errno = ECONNRESET;
-			close(sd);
-			return -1;
-		}
-	}
-
-	retNBytes = 0;
-	errno = 0;
-	while(retNBytes < nbyte){
-		errno = 0;
-		temp = recv(sd, buf, nbyte, 0);
-		if(temp == 0 && retNBytes < nbyte){
-			errno = ECONNRESET;
-			close(sd);
-			return -1;
-		}
-		else if(temp == -1){
-			close(sd);
-			return -1;
-		}
-
-		buf += temp;
-		retNBytes += temp;
-		if(DEBUG){
-			printf("In netread, received: %d / %zd\n", retNBytes, nbyte);
-		}
-	}
-
-	if(error == -1){
-		recBytes = -1;
-	}
-
-	close(sd);
-	return recBytes;
-}
-
-void * netwriteHelper(void * msg){
-	struct decipherSocket * dS = (struct decipherSocket *) msg;
-	int error;
-	int senddata;
-	int retError;
-	int port = dS->port;
-	int clientfd = buildSocket(port);
-	size_t nbyte = dS->nbytes;
-	char * buffer = dS->buffer;
-	
-	errno = 0;
-
-	senddata = send(clientfd, buffer, nbyte, 0);
-
-	if(senddata == -1){
-		dS->error = ECONNRESET;
-		close(clientfd);
-		return 0;
-	}
-	
-	if(errno == SIGPIPE || errno != 0){
-		if(errno == SIGPIPE){
-			dS->error = ECONNRESET;
-			return 0;
-		}
-		else{
-			dS->error = errno;
-			return 0;
-		}
-	}
-
-	retError = 0;
-	while(retError < sizeof(error)){
-		retError += recv(clientfd, &error, sizeof(error), 0);
-		if(retError == 0){
-			dS->error = ECONNRESET;
-			close(clientfd);
-			return 0;
-		}
-	}
-
-	if(retError != sizeof(int)){
-		if(DEBUG){
-			printf("Error: Could not receive error.\n");
-		}
-		return 0;
-	}
-
-	if(error != 0){
-		errno = error;
-		printf("[%d] %s\n", error, strerror(errno));
-		close(clientfd);
-		return 0;
-	}
-
-	close(clientfd);
-
-	return 0;
-}
-ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
-	int error = 0;
-	int recMsg = 0;
-	int recBytes = 0;
 	int recPorts = 0;
 	int temp = 0;
-	int cmd = 3;
-	int sendtype;
-	int sendfd;
-	int sendnbytes;
-	int senddata;
-	int retError;
-	int i;
-	int div;
-	int isFirst;
-	int portArr[MAX_SOCKETS];
-	size_t segment;
-	char * buffer;
-	struct decipherSocket dS[MAX_SOCKETS];
-	pthread_t threadid[MAX_SOCKETS];
-
-	
-	signal(SIGPIPE, SIG_IGN);
-
-	if(client_mode == -1){
-		h_errno = HOST_NOT_FOUND;
-		return -1;
-	}
-	else if((int) nbyte < 0){
-		errno = EINVAL;
-		return -1;
-	}
-
-	if(fildes >= 0 || fildes % 5 != 0 || buf == 0){
-		errno = EBADF;
-		return -1;
-	}
-
-	sd = socket(AF_INET, SOCK_STREAM, 0);
-
-	if(sd == -1){
-		printf("[%d] %s\n", errno, strerror(errno));
-		exit(0);
-	}
-	if(DEBUG){
-		printf("In netwrite, Socket creation successful.\n");
-		printf("In netwrite, cmd: [%d], fildes: [%d], nbyte: [%ld]\n", cmd, fildes, nbyte);
-	}
-
-	serv_addrLen = sizeof(server);
-	inet_ntop(AF_INET, &server.sin_addr, ip, sizeof(ip));
-	int isconnected = connect(sd, (struct sockaddr *)&server, serv_addrLen);
-
-	if(isconnected == -1){
-		errno = ETIMEDOUT;
-		printf("[%d] %s\n", errno, strerror(errno));
-		exit(1);
-	}
-
-	sendtype = send(sd, &cmd, sizeof(sendtype), 0);
-	sendfd = send(sd, &fildes, sizeof(fildes), 0);
-	sendnbytes = send(sd, &nbyte, sizeof(nbyte), 0);
-
-	if(sendtype == -1 || sendfd == -1 || sendnbytes == -1){
-		if(DEBUG){
-			printf("In netwrite, sendtype: [%d], sendfd: [%d], sendnbytes: [%d] \n", sendtype, sendfd, sendnbytes);
-			printf("Error: Could not send.\n");
-		}
-		close(sd);
-		return -1;
-	}
-
 	if(nbyte > 4096){
-		while(recPorts < sizeof(portArr)){
-			temp = recv(sd, &portArr+temp, sizeof(portArr), 0);
+		//receive ports first if size > 2048
+		while(recPorts < sizeof(portsArr)){
+			temp = recv(sd, &portsArr+temp, sizeof(portsArr), 0);
 			recPorts += temp;
 			if(recPorts == 0){
 				errno = ECONNRESET;
@@ -652,90 +375,60 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 				return -1;
 			}
 		}
-		
-		i = 0;
-		div = 0;
-		if(DEBUG){
-			printf("Ports: \n");
-		}
-
-		for(i = 0; i < MAX_SOCKETS; i++){
-			if(portArr[i] > 0){
-				if(DEBUG){
-					printf("%d ", portArr[i]);
-				}
-				dS[i].port = portArr[i];
-				div++;	
-			}
-			else if(portArr[i] < 0){
-				errno = portArr[i] * (-1);
-				printf("[%d] %s\n", errno, strerror(errno));
+		int i = 0;
+		int count = 0;
+		printf("PORTS: ");
+		for(i = 0;i < MAX_SOCKETS;i++){
+			if(portsArr[i]> 0){
+				printf("%d ",portsArr[i]);
+				msg[i].port = portsArr[i];
+				count++;
+			} else if (portsArr[i] < 0){
+				errno = portsArr[i]*-1;
+				printf("[%d] %s\n",errno,strerror(errno));
 				return -1;
 			}
 		}
-		if(DEBUG){
-			printf("\n");
+		printf("\n");
+	int isFirst = 1;
+	for(i = 0;i < count;i++){
+		size_t segment = nbyte / count;
+		if(isFirst){
+			segment += nbyte % count;
+			isFirst = 0;
 		}
-		buffer = (void *) buf;
-		isFirst = 1;
-		for(i = 0; i < div; i++){
-			segment = nbyte / div;
-			if(isFirst){
-				segment += nbyte % div;
-				isFirst = 0;
-			}
-			dS[i].error = 0;
-			dS[i].buffer = buffer;
-			dS[i].nbytes = segment;
-			buffer += segment;
+		msg[i].error = 0;
+		msg[i].buffer = calloc(1,segment);
+		msg[i].nbytes = segment;
+	}
+		// make sock
+		for(i = 0;i < count;i++){
+				pthread_create(&threadid[i], NULL, netreadHelper, (void*)&msg[i]);
 		}
-
-		for(i = 0; i < div; i++){
-			pthread_create(&threadid[i], NULL, netwriteHelper, (void *)&dS[i]);
-		}
-
-		for(i = 0; i < div; i ++){
+		for(i = 0;i<count;i++){
 			if(threadid[i] != 0){
-				pthread_join(threadid[i], 0);
+				pthread_join(threadid[i],0);
 			}
 		}
-
-		for(i = 0; i < div; i++){
-			if(dS[i].error != 0){
-				errno = dS[i].error;
-				return -1;
+		int reader = 0;
+		char * tempbuffer = buf;
+		for(i = 0;i<count;i++){
+			if(threadid[i] != 0){
+				if(msg[i].error != 0){
+					errno = msg[i].error;
+					return -1;
+				}
+				reader += msg[i].read;
+				memcpy(tempbuffer,msg[i].buffer,msg[i].nbytes);
+				free(msg[i].buffer);
+				tempbuffer += msg[i].nbytes;
 			}
 		}
-
-		while(recBytes < sizeof(recBytes)){
-			recBytes += recv(sd, &recMsg, sizeof(recMsg), 0);
-			if(recBytes == 0){
-				errno = ECONNRESET;
-				close(sd);
-				return -1;
-			}
-		}
-
-		if(recMsg < 0){
-			errno = (-1)*recMsg;
-			printf("[%d] %s\n", errno, strerror(errno));
-			return -1;
-		}
-
-		return recMsg;
-		
-	} /* End 4096. */
-
-	errno = 0;
-	senddata = send(sd, buf, nbyte, 0);
-	if(errno == SIGPIPE){
-		errno = ECONNRESET;
-	}
-	else if(senddata == -1){
-		return -1;
-	}
-
-	retError = 0;
+		return reader;
+	} //if 4096
+	
+	// Receive error.
+	int retError = 0;
 	while(retError < sizeof(error)){
 		retError += recv(sd, &error, sizeof(error), 0);
 		if(retError == 0){
@@ -744,22 +437,18 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 			return -1;
 		}
 	}
-
 	if(retError != sizeof(int)){
-		if(DEBUG){
-			printf("Error: Could not receive error.\n");
-		}
+		printf("Could not receive error!\n");
 		return -1;
 	}
-
 	if(error != 0){
 		errno = error;
-		printf("[%d] %s\n", error, strerror(errno));
+		printf("[%d] %s\n",error,strerror(errno));
 		close(sd);
 		return -1;
 	}
-
-	recBytes = 0;
+	// Receive bytes read.
+	int recBytes = 0;
 	while(recBytes < sizeof(recBytes)){
 		recBytes += recv(sd, &recMsg, sizeof(recMsg), 0);
 		if(recBytes == 0){
@@ -769,6 +458,245 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 		}
 	}
 
+	int retnBytes = 0;
+	errno = 0;
+
+	// Receive populated buffer.
+	while(retnBytes < nbyte){
+		int temp;
+		errno = 0;
+		temp = recv(sd, buf, nbyte, 0);
+		if(temp == 0 && retnBytes < nbyte){
+			errno = ECONNRESET;
+			close(sd);
+			return -1;
+		} else if(temp == -1){
+			close(sd);
+			return -1;
+		}
+		buf += temp;
+		retnBytes += temp;
+		printf("Received: %d/%zd\n",retnBytes,nbyte);
+	}
+	if(error == -1){
+		recMsg = -1;
+	}
+	close(sd);
+
+	//Return number of bytes read.
+	return recMsg;
+}
+
+// netwrite helper method.
+void * netwriteHelper(void * s){
+	struct decipherSocket * msg = (struct decipherSocket *) s;
+	int portNum = msg->port;
+	int client = buildSocket(portNum);
+	size_t nbyte = msg->nbytes;
+	char * buffer = msg->buffer;
+	int error;
+	// send data
+	errno = 0;
+	int data = send(client, buffer, nbyte, 0);
+	if(data == -1){
+		msg->error = ECONNRESET;
+		close(client);
+		return 0;
+	}
+	if(errno == SIGPIPE || errno != 0){
+		if(errno == SIGPIPE){
+			msg->error = ECONNRESET;
+			return 0;
+		} else{
+			msg->error = errno;
+			return 0;
+		}
+	}
+	//receive error first
+	int retError = 0;
+	while(retError < sizeof(error)){
+		retError += recv(client, &error, sizeof(error), 0);
+		if(retError == 0){
+			msg->error = ECONNRESET;
+			close(client);
+			return 0;
+		}
+	}
+	if(retError != sizeof(int)){
+		printf("Could not receive error!\n");
+		return 0;
+	}
+	if(error != 0){
+		errno = error;
+		printf("[%d] %s\n",error,strerror(errno));
+		close(client);
+		return 0;
+	}
+	close(client);
+	return 0;
+}
+
+//netwrite attemps to write bytes to remote host
+ssize_t netwrite(int fildes, const void *buf, size_t nbyte){
+	signal(SIGPIPE, SIG_IGN);
+
+	// remember to set errno
+	if(client_mode == -1){
+		h_errno = HOST_NOT_FOUND;
+		return -1;
+	} else if((int)nbyte < 0){
+		errno = EINVAL;
+		return -1;
+	}
+	// remember to set errno
+	if(fildes >=0 || fildes % 5 != 0 || buf == 0){
+		errno = EBADF;
+		return -1;
+	}
+	int error;
+	int recMsg;
+	int recPorts = 0;
+	int temp = 0;
+	int portsArr[MAX_SOCKETS];
+	struct decipherSocket msg[MAX_SOCKETS];
+	pthread_t threadid[MAX_SOCKETS];
+	int cmd = 3;
+	// init server addr and client addr
+	sd = socket(AF_INET, SOCK_STREAM, 0);
+	if(sd < 0){
+		printf("[%d] %s\n",errno,strerror(errno));
+		exit(0);
+	}
+	serv_addrLen = sizeof(server);
+	inet_ntop(AF_INET, &server.sin_addr, ip, sizeof ip);
+	int isConnected = connect(sd, (struct sockaddr *) &server, serv_addrLen);
+	if(isConnected < 0){
+		errno = ETIMEDOUT;
+		printf("[%d] %s\n",errno,strerror(errno));
+		exit(1);
+	}
+	// send type
+	int sendtype = send(sd, &cmd, sizeof(sendtype), 0);
+	// send fdes
+	int sendfd = send(sd, &fildes, sizeof(fildes), 0);
+	//send nbytes
+	int sendnbyte = send(sd, &nbyte, sizeof(nbyte), 0);
+	if(sendtype == -1 || sendfd == -1 || sendnbyte == -1){
+		printf("Sending error\n");
+		close(sd);
+		return -1;
+	}
+	if(nbyte > 4096){
+		//receive ports
+		while(recPorts < sizeof(portsArr)){
+			temp = recv(sd, &portsArr+recPorts, sizeof(portsArr), 0);
+			recPorts += temp;
+			if(recPorts == 0){
+				errno = ECONNRESET;
+				close(sd);
+				return -1;
+			}
+		}
+		int i = 0;
+		int count = 0;
+		printf("PORTS: ");
+		for(i = 0;i < MAX_SOCKETS;i++){
+			if(portsArr[i]> 0){
+				printf("%d ",portsArr[i]);
+				msg[i].port = portsArr[i];
+				count++;
+			}else if (portsArr[i] < 0){
+				errno = portsArr[i]*-1;
+				printf("[%d] %s\n",errno,strerror(errno));
+				return -1;
+			}
+		}
+		printf("\n");
+	char * buffer = (char*)buf;
+	int isFirst = 1;
+	for(i = 0;i < count;i++){
+		size_t segment = nbyte / count;
+		if(isFirst){
+			segment += nbyte % count;
+			isFirst = 0;
+		}
+		msg[i].error = 0;
+		msg[i].buffer = buffer;
+		msg[i].nbytes = segment;
+		buffer += segment;
+	}
+		// make sock
+		for(i = 0;i < count;i++){
+				pthread_create(&threadid[i], NULL, netwriteHelper, (void*)&msg[i]);
+		}
+		for(i = 0;i<count;i++){
+			if(threadid[i] != 0){
+				pthread_join(threadid[i],0);
+			}
+		}
+		for(i = 0;i < count;i++){
+			if(msg[i].error != 0){
+				errno = msg[i].error;
+				return -1;
+			}
+		}
+		//receive bytes written
+		int recBytes = 0;
+		while(recBytes < sizeof(recBytes)){
+			recBytes += recv(sd, &recMsg, sizeof(recMsg), 0);
+			if(recBytes == 0){
+				errno = ECONNRESET;
+				close(sd);
+				return -1;
+			}
+		}
+		if(recMsg < 0){
+			errno = -1*recMsg;
+			printf("[%d] %s\n",errno,strerror(errno));
+			return -1;
+		}
+		return recMsg;
+	}
+
+
+	// send data
+	errno = 0;
+	int sent_data = send(sd, buf, nbyte, 0);
+	if(errno == SIGPIPE){
+		errno = ECONNRESET;
+	} else if(sent_data == -1){
+		return -1;
+	}
+	//receive error first
+	int retError = 0;
+	while(retError < sizeof(error)){
+		retError += recv(sd, &error, sizeof(error), 0);
+		if(retError == 0){
+			errno = ECONNRESET;
+			close(sd);
+			return -1;
+		}
+	}
+	if(retError != sizeof(int)){
+		printf("Could not receive error!\n");
+		return -1;
+	}
+	if(error != 0){
+		errno = error;
+		printf("[%d] %s\n",error,strerror(errno));
+		close(sd);
+		return -1;
+	}
+	// received byte number
+	int recBytes = 0;
+	while(recBytes < sizeof(recBytes)){
+		recBytes += recv(sd, &recMsg, sizeof(recMsg), 0);
+		if(recBytes == 0){
+			errno = ECONNRESET;
+			close(sd);
+			return -1;
+		}
+	}
 	if(error == -1){
 		recMsg = -1;
 	}
@@ -776,38 +704,37 @@ ssize_t netwrite(int fildes, const void * buf, size_t nbyte){
 	return recMsg;
 }
 
+/*
+int netclose(int fildes){
+
+}
+*/
 int main (){
-	/*
-	int net; 
-	net = netserverinit("factory.cs.rutgers.edu", 0);
-	if(DEBUG){
-		printf("0. In main, net: %d\n", net);
-	}
-	
-	int o_fd;
-	o_fd = netopen("file.txt", 0);
-	if(DEBUG){
-		printf("1. In main, netopen fd: %d\n", o_fd);
-	}
-	*/
 	char * hostname = "localhost";
-	netserverinit(hostname, 1);
+	netserverinit(hostname,1);
+	
 	char * filename = "file.txt";
-	char * filename2 = "file2.txt";
-	int fd = netopen(filename, 2);
-	printf("in libnet main, fd: [%d]\n", fd);
-	int fd2 = netopen(filename2, 1);
-	printf("in libnet main, fd2: [%d]\n", fd2);
+	int fdd = netopen(filename,2);
 	FILE * file = fopen(filename, "r");
 	fseek(file, 0L, SEEK_END);
 	int size = ftell(file);
-	printf("SIZE: %d\n", size);
-	char * txt = calloc(1, size);
-	printf("READ: %zd\n", netread(fd, txt, size));
-	printf("Read BUFFER: %s\n", txt);
-	//printf("WRITE: %zd\n", netwrite(fd2, txt, size));
-	//printf("Write BUFFER: %s\n", txt);
+	printf("SIZE: %d\n",size);
+	
+	
+	char * filename2 = "file2.txt";
+	int fdd2 = netopen(filename2,2);
+	FILE * file2 = fopen(filename2, "r");
+	fseek(file2, 0L, SEEK_END);
+	int size2 = ftell(file2);
+	printf("SIZE2: %d\n",size2);
+	
+	
+	char * txt = calloc(1,max(size,size2));
+	printf("Read: %zd\n",netread(fdd,txt,size));
+	printf("Write: %zd\n",netwrite(fdd2,txt,size));
 	printf("[%d] %s\n",errno,strerror(errno));
+	//int fcc =  netclose(fdd);
+	//printf("Netclose %d\n[%d] %s\n",fcc,errno,strerror(errno));
 	free(txt);
 	return 0;
 }

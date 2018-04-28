@@ -52,4 +52,8 @@ Other address spaces created by __fork()__ calls will not be affected even thoug
 
 # Threads # 
 
+Threads allow for spawning concurrent process flow. 
 
+Most effective on multiprocessor or multicore systems where the process flow can be scheduled to run on another processor, thus gaining speed through *parallel* or *distributed* processing.
+
+Threads require less overhead than forking or spawning a new process because the system does not initialize a new system virtual memory space and environment for the process.

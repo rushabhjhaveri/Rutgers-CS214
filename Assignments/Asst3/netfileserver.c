@@ -18,485 +18,402 @@
 
 unsigned int debug = 1;
 
-void * writeFileHelper2(void * msg){
-	struct socketlist * sock = (struct socketlist *) msg;
+
+// this will get a socket for a thread to use for Ext B
+int getclients(struct socketlist * s, int port){
+	int sd;
+	// init server addr and client addr
+	struct sockaddr_in serv_addr;
+	// Attempt to create socket
+	sd = socket(AF_INET, SOCK_STREAM, 0);
+	// If socket creation fails exit
+	if(sd < 0){
+		printf("ERROR: Could not open socket, please check connection!\n");
+		return -1;
+	}
+	// Assign socket_addr varibles
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(port);
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	socklen_t addrLen = sizeof(serv_addr);
+	// Attempt to bind to the socket.
+	int bind_s = bind(sd, (struct sockaddr *) &serv_addr, addrLen);
+	if(bind_s == -1){
+		printf("Could not bind to socket. Please check open connections.\n");
+		return -1;
+	}
+	s->server = serv_addr;
+	s->serverLen = addrLen;
+	return sd;
+
+}
+
+
+// Worker helper method :)
+void * writeFileHelper2(void * s){
+	struct socketlist * sock = (struct socketlist *)s;
 	int sd = sock->client;
 	struct sockaddr_in serv_addr = sock->server;
 	socklen_t addrLen = sock->serverLen;
 	char ipstr[INET6_ADDRSTRLEN];
 	int status = listen(sd, MAX_CLIENTS);
-
-	if (status == -1) {
-		if(debug) printf("In writehelper2, ERROR: Cannot listen\n");
+	
+	if(status < 0){
+		printf("Could not listen\n");
 		return 0;
 	}
-
+	// We listen until we accept a connection.
 	int isaccepted = accept(sd, (struct sockaddr *) &serv_addr, &addrLen);
+	// Information about client
 	inet_ntop(AF_INET, &serv_addr.sin_addr, ipstr, sizeof(ipstr));
 
-	if(isaccepted == -1){
-		if(debug) printf("In writehelper2, Cannot accept\n");
+
+	if(isaccepted < 0){
+		printf("PANIC CLIENT MULTI ERR\n");
 		return 0;
 	}
-
 	errno = 0;
 	size_t nbytes = sock->nbytes;
-	char * readbuffer = sock->buffer;
-	char * buffer = readbuffer;
+	char * readBuffer = sock->buffer;
+	char * buffer = readBuffer;
 	int readBytes = 0;
-
 	while(readBytes < nbytes){
 		int temp = 0;
 		temp = recv(isaccepted, buffer, nbytes, 0);
 		readBytes += temp;
 		buffer += temp;
-		if(temp == 0 && readBytes < nbytes){ break; }
+		if(temp == 0 && readBytes < nbytes){
+			break;
+		}
 	}
-
+	// send error
 	int retError = send(isaccepted, &errno, sizeof(errno), 0);
-	if(retError == -1){
-		if(debug) printf("in writehelper2, Send error\n");
+	if(retError < 0){
+		printf("Send error\n");
 	}
+	// remember to free later
 	close(isaccepted);
 	return 0;
-
 }
 
-void writeFileHelper(int client, int fildes, size_t nbytes){
+// Helper method for writing over 2k bytes.
+void writeFileHelper(int client,int filedes,size_t nbytes){
 	int i = 0;
 	int bindable = 0;
-	int isFirst = 0;
-	int readBytes = 0;
-	char * buffer;
-	size_t segment = 0;
-	int reader, writer, sendPorts;
 	int portsArr[MAX_SOCKETS];
-	bzero(portsArr, sizeof(portsArr));
+	bzero(portsArr,sizeof(portsArr));
 	pthread_t threadid[MAX_SOCKETS];
-	struct socketlist * sL[MAX_SOCKETS];
+	struct socketlist * sock[MAX_SOCKETS];
 	pthread_mutex_lock(&sockets);
-	if(debug){
-		printf("Ports: ");
-	}
-
-	for(i = 0; i < MAX_SOCKETS; i++){
+	printf("PORTS: ");
+	for(i = 0;i < MAX_SOCKETS;i++){
 		if(bindable == MAX_STREAMS_PER_CLIENT){
 			break;
 		}
-
 		if(socketL[i].clientsocket == 0){
 			socketL[i].clientsocket = client;
 			socketL[i].part = bindable;
-			socketL[i].fd = fildes;
-			sL[bindable] = &socketL[i];
+			socketL[i].fd = filedes;
+			sock[bindable] = &socketL[i];
 			portsArr[bindable] = socketL[i].port;
 			bindable++;
-			if(debug){
-				printf("%d ", socketL[i].port);
-			}
+			printf("%d ",socketL[i].port);
 		}
 	}
-
-	if(debug){
-		printf("\n");
-	}
-
+	printf("\n");
 	pthread_mutex_unlock(&sockets);
-
 	if(bindable == 0){
-		portsArr[0] = (-1)*(ECONNRESET);
-		send(client, &portsArr, sizeof(portsArr), 0);
-		if(debug){
-			printf("Cannot bind to any more sockets.\n");
-		}
+		portsArr[0] = -1*ECONNRESET;
+		send(client, &portsArr, sizeof(portsArr),0);
+		printf("CANNOT BIND ANY MORE SOCKETS!\n");
 		return;
 	}
-
 	errno = 0;
 
-	isFirst = 1;
-	
-	for(i = 0; i < bindable; i++){
-		segment = nbytes / bindable;
+	int isFirst = 1;
+	for(i = 0;i < bindable;i++){
+		size_t segment = nbytes / bindable;
 		if(isFirst){
 			segment += nbytes % bindable;
 			isFirst = 0;
 		}
-
-		buffer = calloc(1, segment);
-		sL[i]->buffer = buffer;
-		sL[i]->nbytes = segment;
+		char * buffer = calloc(1,segment);
+		sock[i]->buffer = buffer;
+		sock[i]->nbytes = segment;
 	}
-
+	// sending the ports to be used.
 	if(errno != 0){
 		pthread_mutex_lock(&sockets);
-		for(i = 0; i < bindable; i++){
-			sL[i]->clientsocket = 0;
+		for(i = 0;i<bindable;i++){
+			sock[i]->clientsocket = 0;
 		}
 		pthread_mutex_unlock(&sockets);
-		portsArr[0] = errno * (-1);
-		send(client, &portsArr, sizeof(portsArr), 0);
+		portsArr[0] = errno * -1;
+		send(client, &portsArr, sizeof(portsArr),0);
 		return;
 	}
-
-	sendPorts = send(client, &portsArr, sizeof(portsArr), 0);
-	if(sendPorts == -1){
-		if(debug){
-			printf("Error: Could not send.\n");
-		}
+	// send ports to client
+	int sendPorts = send(client, &portsArr, sizeof(portsArr),0);
+	if(sendPorts < 0){
+		printf("Sending error\n");
 		return;
 	}
-
-	for(i = 0; i < bindable; i++){
-		pthread_create(&threadid[i], NULL, writeFileHelper2, (void *) sL[i]);
+	for(i = 0;i < bindable;i++){
+		pthread_create(&threadid[i], NULL, writeFileHelper2, (void*)sock[i]);
 	}
-
-	for(i = 0; i < bindable; i++){
-		pthread_join(threadid[i], 0);
+	for(i = 0;i < bindable;i++){
+		pthread_join(threadid[i],0);
 	}
-
 	errno = 0;
-	reader = 0;
-	writer = 0;
-	
-	for(i = 0; i < bindable; i++){
-		reader = write(fildes, sL[i]->buffer, sL[i]->nbytes);
-		free(sL[i]->buffer);
+	// do some negative errno stuff
+	int reader = 0;
+	int writer = 0;
+	for(i = 0;i < bindable;i++){
+		reader = write(filedes, sock[i]->buffer,sock[i]->nbytes);
+		free(sock[i]->buffer);
 		if(reader == -1){
-			reader = errno * (-1);
+			reader = -1*errno;
 			writer = reader;
 			break;
 		}
 		writer += reader;
 	}
-
-	readBytes = send(client, &writer, sizeof(writer),0 );
+	// send bytes written
+	int readBytes = send(client, &writer, sizeof(writer),0);
 	if(readBytes < 0){
-		if(debug) printf("ERROR: Cannot send :( \n");
+		printf("Sending error\n");
 		return;
 	}
-
 	pthread_mutex_lock(&sockets);
-	for(i = 0; i < bindable; i++){
-		close(sL[i]->clientsocket);
-		sL[i]->clientsocket = 0;
+	for(i = 0;i<bindable;i++){
+		close(sock[i]->clientsocket);
+		sock[i]->clientsocket = 0;
 	}
 	pthread_mutex_unlock(&sockets);
 	return;
 }
 
-
+// Function to write file
 int writeFile(int client){
-	char * buffer;
-	char * tempbuffer;
-	int fildes;
+	char * readBuffer;
+	int fd;
 	int error;
-	int reader;
-	int recfd;
-	int recnbytes;
-	int buffersize;
-	int temp;
 	size_t nbytes;
-	int retError, retBytes;
-
-	recfd = 0;
+	int reader;
+	// receive file descriptor
+	int recfd = 0;
 	while(recfd < sizeof(int)){
-		recfd += recv(client, &fildes, sizeof(int), 0);
+		recfd += recv(client, &fd, sizeof(int), 0);
 		if(recfd == 0){
 			continue;
 		}
 	}
-
-	recnbytes = 0;
-	while(recnbytes < sizeof(ssize_t)){
-		recnbytes += recv(client, &nbytes, sizeof(ssize_t), 0);
-		if(recnbytes == 0){
+	// receive # of bytes to write
+	int recnbyte = 0;
+	while(recnbyte < sizeof(ssize_t)){
+		recnbyte += recv(client, &nbytes, sizeof(ssize_t), 0);
+		if(recnbyte == 0){
 			continue;
 		}
 	}
 
+	// if large bytes thread method
 	if(nbytes > 4096){
-		if(fildes % 5 == 0){
-			fildes /= (-5);
-		}
-		else{
+		if(fd % 5 == 0){
+			fd /= -5;
+		} else{
 			reader = -1;
-			if(debug){
-				printf("Do later.\n");
-			}
+			printf("DO LATER\n");
 		}
-
-		writeFileHelper(client, fildes, nbytes);
-		if(debug){
-			printf("Client [%d] done writing.\n", client);
-		}
-
+		writeFileHelper(client, fd,nbytes);
+		printf("Client %d done writing\n",client);
 		return 0;
 	}
 
-	buffer = calloc(1, nbytes);
-	tempbuffer = buffer;
-	buffersize = 0;
-	while(buffersize < nbytes){
-		temp = 0;
-		temp = recv(client, tempbuffer, nbytes, 0);
-		buffersize += temp;
-		tempbuffer += temp;
-		if(temp == 0 && buffersize < nbytes){
+	//receive data to write
+	readBuffer = calloc(1,nbytes);
+	char * buffer = readBuffer;
+	int readBytes = 0;
+	while(readBytes < nbytes){
+		int temp = 0;
+		temp = recv(client, buffer, nbytes, 0);
+		readBytes += temp;
+		buffer += temp;
+		if(temp == 0 && readBytes < nbytes){
 			return 0;
 		}
 	}
-
-	if(fildes % 10 == 0){
-		fildes /= (-5);
-		if(debug){
-			printf("fildes: %d\n", fildes);
-		}
-		reader = write(fildes, buffer, nbytes);
-		if(debug){
-			printf("Written Bytes: %d\n",reader);
-		}
-	}
-	else{
+	if(fd % 5 == 0){
+		fd /= -5;
+		printf("FD: %d\n",fd);
+		reader = write(fd,readBuffer,nbytes);
+		printf("Written Bytes: %d\n",reader);
+	} else{
 		reader = -1;
 	}
-	
 	if(reader == -1){
 		error = errno;
 		if(error == 0){
 			error = -1;
 		}
-	}
-	else{
+	} else{
 		error = 0;
 	}
-
-	retError = send(client, &error, sizeof(error), 0);
-	if(reader == -1 || retError == -1){
-		free(buffer);
+	// send error
+	int retError = send(client, &error, sizeof(error), 0);
+	if(reader == -1 || retError < 0){
+		free(readBuffer);
 		return -1;
 	}
-
-	retBytes = send(client, &reader, sizeof(reader), 0);
-
-	if(retBytes == -1){
-		if(debug){
-			printf("Sending error.\n");
-		}
+	// send bytes written
+	int retBytes = send(client, &reader, sizeof(reader),0);
+	if(retBytes < 0){
+		printf("Sending error\n");
 	}
-
-	free(buffer);
+	free(readBuffer);
 	return 0;
 }
 
-
-void * readFileHelper2(void * sockList){
-	
-	int sd;
-	int status;
-	int isaccepted;
-	int error;
-	int reader;
-	int retError;
-	int readBytes;
-	int retBytes;
-	size_t nbytes;
-	char * buffer;
+// worker thread for ext B
+void * readFileHelper2(void * s){
+	struct socketlist * sock = (struct socketlist *)s;
+	int sd = sock->client;
+	struct sockaddr_in serv_addr = sock->server;
+	socklen_t addrLen = sock->serverLen;
 	char ipstr[INET6_ADDRSTRLEN];
-	socklen_t addrLen;
-	struct socketlist * sL = (struct socketlist *) sockList;
-	struct sockaddr_in serv_addr = sL->server;
-
-	addrLen = sL->serverLen;
-	sd = sL->client;
-	status = listen(sd, MAX_CLIENTS);
-
-	if(status == -1){
-		if(debug){
-			printf("Could not listen.\n");
-		}
+	int status = listen(sd, MAX_CLIENTS);
+	if(status < 0){
+		printf("Could not listen\n");
 		return 0;
 	}
-
-	isaccepted = accept(sd, (struct sockaddr *) &serv_addr, &addrLen);
-
+	// We listen until we accept a connection.
+	int isaccepted = accept(sd, (struct sockaddr *) &serv_addr, &addrLen);
+	// Information about client
 	inet_ntop(AF_INET, &serv_addr.sin_addr, ipstr, sizeof(ipstr));
-	
-	if(isaccepted == -1){
-		printf("[%d] %s\n", h_errno, strerror(h_errno));
+
+	if(isaccepted < 0){
+		printf("[%d] %s\n",h_errno,strerror(h_errno));
+		printf("MULTI ERROR CLIENT PANIC\n");
 		return 0;
 	}
-
-	nbytes = sL->nbytes;
-	buffer = sL->buffer;
-	error = 0;
-	reader = sL->nread;
-
-	retError = send(isaccepted, &error, sizeof(error), 0);
+	size_t nbytes = sock->nbytes;
+	char * readBuffer = sock->buffer;
+	int error = 0;
+	int reader = sock->nread;
+	// send error
+	int retError = send(isaccepted, &error, sizeof(error), 0);
 	if(reader == -1 || retError == -1){
-		free(buffer);
+		free(readBuffer);
 		return 0;
 	}
-
-	readBytes = send(isaccepted, &reader, sizeof(reader), 0);
+	// send bytes read
+	int readBytes = send(isaccepted, &reader, sizeof(reader),0);
 	if(readBytes == -1){
-		free(buffer);
-		if(debug){
-			printf("Sending error.\n");
-		}
+		free(readBuffer);
+		printf("Error sending\n");
 		return 0;
 	}
-
-	retBytes = send(isaccepted, buffer, nbytes, 0);
-	if(retBytes == -1){
-		free(buffer);
-		if(debug){
-			printf("Sending error.\n");
-		}
+	// send data
+	int retnBytes = send(isaccepted, readBuffer, nbytes, 0);
+	if(retnBytes == -1){
+		free(readBuffer);
+		printf("Error sending\n");
 		return 0;
 	}
-
-	if(debug){
-		printf("In readFileHelper2: sent [%d] bytes.\n", retBytes);
-	}
-	free(buffer);
+	printf("Sent: %d\n",retnBytes);
+	free(readBuffer);
 	return 0;
 }
 
-/*
-   Helper method for readFile().
-
-   Handles reads where the number of bytes to be read is > 4096 [Extension B].
-*/
-void readFileHelper(int client, int fd, size_t nbytes){
-	int i;
-	int bindable;
+// helper method for reading
+void readFileHelper(int client,int filedes,size_t nbytes){
+	int i = 0;
+	int bindable = 0;
 	int portsArr[MAX_SOCKETS];
-	int isFirst;
-	int sendPorts;
-	size_t segment;
-	char * buffer;
 	pthread_t threadid[MAX_SOCKETS];
-
-	/* Initialize portsArr. */
-	bzero(portsArr, sizeof(portsArr));
-
-	struct socketlist * sL[MAX_SOCKETS];
-	bindable = 0;
-
+	bzero(portsArr,sizeof(portsArr));
+	struct socketlist * sock[MAX_SOCKETS];
 	pthread_mutex_lock(&sockets);
-
-	if(debug){
-		printf("In readFileHelper, Ports: ");
-	}
-
-	for(i = 0; i < MAX_SOCKETS; i++){
+	printf("PORTS: ");
+	for(i = 0;i < MAX_SOCKETS;i++){
 		if(bindable == MAX_STREAMS_PER_CLIENT){
 			break;
 		}
 		if(socketL[i].clientsocket == 0){
 			socketL[i].clientsocket = client;
 			socketL[i].part = bindable;
-			socketL[i].fd = fd;
-			sL[bindable] = &socketL[i];
+			socketL[i].fd = filedes;
+			sock[bindable] = &socketL[i];
 			portsArr[bindable] = socketL[i].port;
 			bindable++;
-			if(debug){
-				printf("%d ", socketL[i].port);
-			}
+			printf("In netserver, readhelper, socketL[%d] = %d\n ",i,socketL[i].port);
+			printf("In netserver, readhelper, socketL[%d].clientsock = %d\n", i, socketL[i].clientsocket);
+			printf("In netserver, readhelper, socketL[%d].part = %d\n", i, socketL[i].part);
+			printf("In netserver, readhelper, socketL[%d].fd = %d\n", i, socketL[i].fd);
 		}
 	}
-
-	if(debug){
-		printf("\n");
-	}
-
+	printf("\n");
 	pthread_mutex_unlock(&sockets);
-
 	if(bindable == 0){
-		portsArr[0] = (-1) * ECONNRESET;
-		send(client, &portsArr, sizeof(portsArr), 0);
-		if(debug){
-			printf("No more sockets can be bound.\n");
-		}
+		portsArr[0] = -1*ECONNRESET;
+		send(client, &portsArr, sizeof(portsArr),0);
+		printf("CANNOT BIND ANY MORE SOCKETS!\n");
 		return;
 	}
-
 	errno = 0;
-	isFirst = 1;
-	if(debug){
-		printf("In readFileHelper: bindable: [%d]\n", bindable);
-	}
-
-	for(i = 0; i < bindable; i++){
-		segment = nbytes/bindable;
+	int isFirst = 1;
+	for(i = 0;i < bindable;i++){
+		size_t segment = nbytes / bindable;
 		if(isFirst){
 			segment += nbytes % bindable;
 			isFirst = 0;
 		}
-		buffer = calloc(1, segment);
-		sL[i]->nread = read(fd, buffer, segment);
-		sL[i]->buffer = buffer;
-		sL[i]->nbytes = segment;
+		char * buffer = calloc(1,segment);
+		sock[i]->nread = read(filedes,buffer,segment);
+		sock[i]->buffer = buffer;
+		sock[i]->nbytes = segment;
 	}
-
+	// remember to send nbyte
 	if(errno != 0){
-		printf("[%d] %s\n", errno, strerror(errno));
+		printf("[%d] %s\n",errno,strerror(errno));
 		pthread_mutex_lock(&sockets);
-		for(i = 0; i < bindable; i++){
-			sL[i]->clientsocket = 0;
+		for(i = 0;i<bindable;i++){
+			sock[i]->clientsocket = 0;
 		}
 		pthread_mutex_unlock(&sockets);
-		portsArr[0] = errno * (-1);
-		send(client, &portsArr, sizeof(portsArr), 0);
+		portsArr[0] = errno * -1;
+		send(client, &portsArr, sizeof(portsArr),0);
 		return;
 	}
-
-	sendPorts = send(client, &portsArr, sizeof(portsArr), 0);
-
+	// send ports to client
+	int sendPorts = send(client, &portsArr, sizeof(portsArr),0);
 	if(sendPorts == -1){
-		if(debug){
-			printf("Error sending ports.\n");
-		}
+		printf("Sending Error\n");
 		return;
 	}
-
-	for(i = 0; i < bindable; i++){
-		pthread_create(&threadid[i], NULL, readFileHelper2, (void *) sL[i]);
+	for(i = 0;i < bindable;i++){
+		pthread_create(&threadid[i], NULL, readFileHelper2, (void*)sock[i]);
 	}
-
-	for(i = 0; i < bindable; i++){
-		pthread_join(threadid[i], 0);
+	for(i = 0;i < bindable;i++){
+		pthread_join(threadid[i],0);
 	}
-
 	pthread_mutex_lock(&sockets);
-	for(i = 0; i < bindable; i++){
-		sL[i]->clientsocket = 0;
+	for(i = 0;i<bindable;i++){
+		sock[i]->clientsocket = 0;
 	}
-
 	pthread_mutex_unlock(&sockets);
-	
 	return;
 }
 
-
-/*
-   netread() handler on the server-side.
-*/
+// function for reading.
 int readFile(int client){
+	char * readBuffer;
 	int fd;
 	int error;
+	size_t nbytes;
 	int reader;
-	int recfd;
-	int recNByte;
-	int sendError;
-	int sendReadBytes;
-	int sendNBytes;
-	size_t nbyte;
-	char * buffer;
-	
-	/* Receive filedescriptor. */
-	recfd = 0;
+	// receive file descriptor
+	int recfd = 0;
 	while(recfd < sizeof(int)){
 		recfd += recv(client, &fd, sizeof(int), 0);
 		if(recfd == 0){
@@ -504,87 +421,64 @@ int readFile(int client){
 		}
 	}
 
-	/* Receive number of bytes to be read. */
-	recNByte = 0;
-	while(recNByte < sizeof(size_t)){
-		recNByte += recv(client, &nbyte, sizeof(size_t), 0);
-		if(recNByte == 0){
+	// receive # of bytes to read
+	int recnbyte = 0;
+	while(recnbyte < sizeof(size_t)){
+		recnbyte += recv(client, &nbytes, sizeof(size_t), 0);
+		if(recnbyte == 0){
 			continue;
 		}
 	}
+	
+	
+	// if large bytes thread method
+	if(nbytes > 4096){
 
-	/* If # of bytes > 4096 - Extension B. Use threads.*/
-	if(nbyte > 4096){
 		if(fd % 5 == 0){
-			fd /= (-5);
-		}
-		else{
+			fd /= -5;
+		} else{
 			reader = -1;
-			if(debug){
-				printf("Handle later.\n");
-			}
+			printf("DO LATER\n");
 		}
-
-		readFileHelper(client, fd, nbyte);
-		if(debug){
-			printf("Done reading client [%d]\n", client);
-		}
+		readFileHelper(client, fd, nbytes);
+		printf("Client %d done reading\n",client);
 		return 0;
 	}
 
-	/* Allocate memory for the buffer. */
-	buffer = calloc(1, nbyte);
-
+	readBuffer = calloc(1,nbytes);
 	if(fd % 5 == 0){
-		fd /= (-5);
-		reader = read(fd, buffer, nbyte);
-		if(debug){
-			printf("Read bytes: [%d]\n", reader);
-		}
-	}
-	else{
+		fd /= -5;
+		reader = read(fd,readBuffer,nbytes);
+		printf("Read Bytes: %d\n",reader);
+	} else{
 		reader = -1;
 	}
-
 	if(reader == -1){
 		error = errno;
 		if(error == 0){
 			error = -1;
 		}
-	}
-	else{
+	} else{
 		error = 0;
 	}
-
-	/* Send error. */
-	sendError = send(client, &error, sizeof(error), 0);
-
+	// send error
+	int retError = send(client, &error, sizeof(error), 0);
 	if(reader == -1){
-		free(buffer);
+		free(readBuffer);
 		return -1;
 	}
-
-	/* Send number of bytes [actually] read. */
-	sendReadBytes = send(client, &reader, sizeof(reader), 0);
-
-	/* Send populated buffer. */
-	sendNBytes = send(client, buffer, nbyte, 0);
-
-	/* Check if any of the sends failed. Free buffer, return -1. */
-	if(sendError == -1 || sendReadBytes == -1 || sendNBytes == -1){
-		free(buffer);
+	// send bytes read
+	int readBytes = send(client, &reader, sizeof(reader),0);
+	// send data
+	int retnBytes = send(client, readBuffer, nbytes, 0);
+	if(retError == -1 || readBytes == -1 || retnBytes == -1){
+		free(readBuffer);
 		return -1;
 	}
-
-	if(debug){
-		printf("Sent: [%d] bytes.\n", sendNBytes);
-	}
-
-	free(buffer);
-
+	printf("Sent: %d\n",retnBytes);
+	free(readBuffer);
 	return 0;
 }
-
 
 /*
    Adds a file to list clientlist. 
@@ -593,64 +487,44 @@ int readFile(int client){
 
 */
 
-int addFileToList(struct filelist * ptr, int clientfd, int mode, int flag){
-	int pipestat; /* Holds value returned by pipe(int fd[2]). */
-	
-	if(debug){
-		printf("ADDING TO LIST...\n");
-	}
+int addFileToList(struct filelist * ptr, int client, int mode, int flag){
 	
 	pthread_mutex_lock(&list);
-	
-	/* Initially, prev and curr point to same node. */
 	struct clientlist * curr = ptr->list;
 	struct clientlist * prev = ptr->list;
-	
 	int fd = 0;
-	
-	/* If clientlist is empty, add at the beginning. */
-	
 	if(curr == 0){
-		ptr->list = calloc(1, sizeof(clientlist));
+		ptr->list = calloc(1,sizeof(clientlist));
 		curr = ptr->list;
-		curr->client = clientfd;
+		curr->client = client;
 		gettimeofday(&curr->start, NULL);
 		curr->mode = mode;
 		curr->flag = flag;
-		pipestat = pipe(curr->fd);
-		if(pipestat == -1){
-			printf("[%d] %s\n", errno, strerror(errno));
+		int pipe_stat = pipe(curr->fd);
+		if(pipe_stat < 0){
+			printf("ERROR PIPING???\n");
 		}
 		fd = (curr->fd)[0];
 		pthread_mutex_unlock(&list);
 		return fd;
 	}
-	
-	/* If clientlist is nonempty, add at the end. */
-	
-	while(curr != NULL){
+	for(;curr != 0;curr = curr->next){
 		prev = curr;
-		curr = curr->next;
 	}
-	
-	prev->next = calloc(1, sizeof(clientlist));
+	prev->next = calloc(1,sizeof(clientlist));
 	prev = prev->next;
-	prev->client = clientfd;
+	prev->client = client;
 	gettimeofday(&prev->start, NULL);
 	prev->mode = mode;
 	prev->flag = flag;
-	
-	pipestat = pipe(prev->fd);
-	
-	if(pipestat == -1){
-		printf("[%d] %s\n", errno, strerror(errno));
+	int pipe_stat2 = pipe(prev->fd);
+	if(pipe_stat2 < 0){
+		printf("ERROR PIPING???\n");
 	}
-	
 	fd = (prev->fd)[0];
-	
 	pthread_mutex_unlock(&list);
-	
-	return fd;
+	if(debug) printf("\n\nLeaving addfiletolist\n\n");
+	return fd;	
 }
 
 /*
@@ -664,33 +538,22 @@ int addFileToList(struct filelist * ptr, int clientfd, int mode, int flag){
 
 struct filelist * lookup_file(char * filename, int node){
 	
-	/* Initially, curr and prev point to the same node. */
-	
 	struct filelist * curr = fL;
 	struct filelist * prev = curr;
-	
 	pthread_mutex_lock(&list);
-	
-	/* Loop through filelist looking for a match. */
-	while(curr != NULL){
-
-		/* If a match is found, return corrosponding filelist struct. */
+	for(;curr != 0;curr = curr->next){
 		if(curr->nnode == node){
 			pthread_mutex_unlock(&list);
 			return curr;
 		}
-
 		prev = curr;
 	}
-	
-	/* If not found, add to end of filelist. */
-	prev->next = calloc(1, sizeof(filelist));
+	prev->next = calloc(1,sizeof(filelist));
 	prev = prev->next;
 	prev->filename = filename;
 	prev->nnode = node;
 	pthread_mutex_unlock(&list);
-
-	return prev; /* Return newly added node. */
+	return prev;
 }
 
 /*
@@ -724,12 +587,219 @@ int is_file(const char * path){
 	return 1;
 }
 
+//extension A. Used to check transfer mode conflicts, and update queue/linked list
+int rw_conflict(char * filename, int mode, int flag, int client, int rd){
+	
+	int mode0 = 0;
+	struct stat filestat; 
+	struct fdlist * curr = fdL;
+	struct fdlist * possible = 0;
+	struct filelist * ptr = 0;
+	stat (filename, &filestat);  
+	int nnode = filestat.st_ino;
+	int mode1 = 0;
+	int fd = 0;
+	int write1 = 0;
+	pthread_mutex_lock(&lock);
+	if(fL == 0){
+		printf("Adding file to list\n");
+		fL = calloc(1,sizeof(filelist));
+		fL->filename = filename;
+		fL->nnode = nnode;
+	}
+	ptr = lookup_file(filename,nnode);
+
+	for(;curr != 0;curr = curr->next){
+		if(curr->next == 0){
+			possible = curr;
+		}
+		if(curr->nnode == nnode && curr->mode == 0){
+			write1 = 1;
+			mode0 = 1;
+			continue;
+		}
+		if(curr->nnode == nnode && curr->mode == 1 && curr->filemode == O_RDONLY){
+			mode1 = 1;
+			continue;
+		}
+		if(curr->nnode == nnode && curr->mode == 1 && curr->filemode != O_RDONLY){
+			write1 = 1;
+			mode1 = 1;
+			continue;
+		}
+
+		if(curr->nnode == nnode && curr->mode == 2){
+			if(rd == 0){
+				fd = addFileToList(ptr,client,mode,flag);
+				pthread_mutex_unlock(&lock);
+				return fd;
+			}
+			pthread_mutex_unlock(&lock);
+			return -1;
+		}
+	}
+	if((mode1 || mode0) && mode == 2){
+		if(rd == 0){
+			fd = addFileToList(ptr,client,mode,flag);
+			pthread_mutex_unlock(&lock);
+			return fd;
+		}
+		pthread_mutex_unlock(&lock);
+		return -1;
+	}
+	curr = possible;
+	if(rd == 0){
+		if((mode1 == 0) || (mode1 == 1 && write1 == 1 && flag == O_RDONLY) || (mode1 == 1 && write1 == 0) || curr == 0){
+			errno = 0;
+			int o_flag = open(filename,flag) * -5;
+			if(errno != 0 || o_flag == -1){
+				pthread_mutex_unlock(&lock);
+				return -1;
+			}
+			if(curr == 0){
+				fdL = calloc(1,sizeof(fdlist));
+				possible = fdL;
+			} else{
+				possible->next = calloc(1,sizeof(fdlist));
+				possible = possible->next;
+			}
+			possible->filename = filename;
+			possible->nnode = nnode;
+			possible->mode = mode;
+			possible->filemode = flag;
+			pthread_mutex_unlock(&lock);
+			possible->fd = o_flag;
+			return possible->fd;
+		} else{
+			fd = addFileToList(ptr,client,mode,flag);
+			pthread_mutex_unlock(&lock);
+			return fd;
+		}
+	} else{
+		if((mode1 == 0) || (mode1 == 1 && write1 == 1 && flag == O_RDONLY) || (mode1 == 1 && write1 == 0) || curr == 0){
+			pthread_mutex_unlock(&lock);
+			return 0;
+		} else{
+			pthread_mutex_unlock(&lock);
+			return -1;
+		}
+	}
+	pthread_mutex_unlock(&lock);
+	return -1;
+	
+}
+
+// used as a debug to list open files.
+void listfiles(){
+	struct fdlist * curr = fdL;
+	printf("-------FILES-------\n");
+	for(;curr != NULL;curr = curr->next){
+		printf("FILE: %s\nTRANSFER MODE: %d\nFD: %d\nFILE MODE: %d\n\n",curr->filename,curr->mode,curr->fd,curr->filemode);
+	}
+	printf("-------------------\n");
+}
+
+//attemps to open a file.
+int openFile(int client){
+	char * path = calloc(1,256);
+	int flags;
+	int mode;
+	int error;
+	int isConflict;
+	int fd;
+	// receive connection mode (exclusive, transaction, etc)
+	int recmode = 0;
+	while(recmode < sizeof(int)){
+		recmode += recv(client, &mode, sizeof(int), 0);
+		if(recmode == 0){
+			continue;
+		}
+	}
+	// receive flags(read only,write,wr)
+	int recflags = 0;
+	while(recflags < sizeof(int)){
+		recflags += recv(client, &flags, sizeof(int), 0);
+		if(recflags == 0){
+			continue;
+		}
+	}
+	//path name
+	int recpath = 0;
+	while(recpath < 256){
+		int temp = 0;
+		temp = recv(client, path, 256, 0);
+		recpath += temp;
+		if(temp == 0){
+			continue;
+		}
+	}
+	//check for modes
+	if(is_file(path)){
+		errno = 0;
+		pthread_mutex_lock(&conflict);
+		isConflict = rw_conflict(path,mode,flags, client,0);
+		pthread_mutex_unlock(&conflict);
+		if(errno != 0){
+			error = errno;
+			printf("[%d] %s\n",errno,strerror(errno));
+			fd = -1;
+		}
+		if(isConflict > 0 && errno == 0){
+			while(1){
+				int pipe = 0;
+				printf("Conflict\n");
+				printf("PIPE: %d\n",isConflict);
+				read(isConflict,&pipe,sizeof(pipe));
+				
+				if(pipe == -1){
+					printf("TIMEOUT\n");
+					fd = -1;
+					errno = EWOULDBLOCK;
+					send(client, &fd, sizeof(fd), 0);
+					send(client, &errno, sizeof(errno), 0);
+					return errno;
+				}
+				printf("PP: %d\n",pipe);
+				pthread_mutex_lock(&conflict2);
+				isConflict = rw_conflict(path,mode,flags, client,0);
+				printf("BAD %d\n",isConflict);
+				pthread_mutex_unlock(&conflict2);
+				if(isConflict <= 0){
+					fd = isConflict;
+					break;
+				}
+			}
+			// permision denied fix
+		} else{
+			if(fd == -1){
+				error = errno;
+			} else{
+				fd = isConflict;
+			}
+		}
+	}else{
+		fd = -1;
+		error = errno;
+	}
+	printf("Flag: %d\nMode: %d\nFilename: %s\n",flags,mode,path);
+	int retnBytes = send(client, &fd, sizeof(fd), 0);
+	int retError = send(client, &error, sizeof(error), 0);
+	if(retError == -1 || retnBytes == -1){
+		printf("Error sending\n");
+		return -1;
+	}
+	//listfiles();
+	return fd;
+}
+
+
 /*
    For extension A.
 
    Checks for transfer mode conflicts, and also updates linked list.
 */
 
+/*
 int rdwr_conflict(char * filename, int mode, int flag, int clientfd, int rd){
 	struct stat filestatus;
 	struct fdlist * filedescrips = fdL;
@@ -738,14 +808,13 @@ int rdwr_conflict(char * filename, int mode, int flag, int clientfd, int rd){
 	
 	int tempmode = 0;
 	int tempmode2 = 0;
-	int wr = 0; /* denotes write mode. */
+	int wr = 0; 
 	int nnode;
-	int fd = 0; /* file descriptor returned by this function. */
-	int openfd; /* file descriptor returned on calling open() system call. */
+	int fd = 0; 
+	int openfd; 
 	
 	stat(filename, &filestatus); 
 	
-	/* st_ino is the file serial number. Distinguishes this file from all other files on the same device. */
 	nnode = filestatus.st_ino; 
 
 	pthread_mutex_lock(&lock);
@@ -760,7 +829,7 @@ int rdwr_conflict(char * filename, int mode, int flag, int clientfd, int rd){
 
 	curr = lookup_file(filename, nnode);
 	
-	/* Make variable assignments based on conditions. */
+	
 	while(filedescrips != 0){
 		if(filedescrips->next == 0){
 			candidate = filedescrips;
@@ -857,11 +926,7 @@ int rdwr_conflict(char * filename, int mode, int flag, int clientfd, int rd){
 	return -1;
 }
 
-/*
-   Attempts to open a file.
 
-
-*/
 int openFile(int clientfd){
 
 	char * path = calloc(1, 256);
@@ -875,7 +940,7 @@ int openFile(int clientfd){
 	int recpath;
 	int temp;
 
-	/* Receives connection mode. */
+	
 	recmode = 0;
 	while(recmode < sizeof(int)){
 		recmode += recv(clientfd, &mode, sizeof(int), 0);
@@ -884,7 +949,7 @@ int openFile(int clientfd){
 		}
 	}
 	
-	/* Receives open flags [RDONLY, WRONLY, RDWR]. */
+	
 	recflags = 0;
 	while(recflags < sizeof(int)){
 		recflags += recv(clientfd, &flags, sizeof(int), 0);
@@ -893,7 +958,7 @@ int openFile(int clientfd){
 		}
 	}
 	
-	/* Receives filepath. */
+	
 	recpath = 0;
 	while(recflags < 256){
 		temp = 0;
@@ -908,12 +973,9 @@ int openFile(int clientfd){
 		printf("0. In openFile, recmode: %d, recflags: %d, recpath: %d\n", recmode, recflags, recpath);
 	}
 
-	/* 
-	   Checks if file is a regular file.
-
-	   Checks for client mode. 
-	*/
 	if(is_file(path)){
+
+		if(debug) printf("\n\nIn is_file loop\n\n");
 		errno = 0;
 		pthread_mutex_lock(&conflict);
 		conflict_mode = rdwr_conflict(path, mode, flags, clientfd, 0);
@@ -925,6 +987,7 @@ int openFile(int clientfd){
 			retfd = -1;
 		}
 		if(conflict_mode > 0 && errno == 0){
+			if(debug) printf("\n\nIn conflict loop\n\n");
 			while(1){
 				int isconflict = 0;
 				if(debug){
@@ -991,7 +1054,7 @@ int openFile(int clientfd){
 
 	return retfd;
 }
-
+*/
 /*
    This is where the thread begins. 
 
@@ -1011,13 +1074,13 @@ void * start(void * c){
 		printf("In start, Request type: [%d]\n", t);
 	}
 	switch(t){
-		case 1: if(debug){printf("in case 1\n");}
+		case 1: if(debug) printf("in case 1\n");
 			openFile(client);
 			break;
-		case 2: if(debug){printf("in case 2\n");}
+		case 2: if(debug) printf("in case 2\n");
 			readFile(client);
 			break;
-		case 3: if(debug){printf("In case 3\n");}
+		case 3: if(debug) printf("In case 3\n");
 			writeFile(client);
 			break;
 	}
@@ -1031,7 +1094,7 @@ int main(){
 	
 	signal(SIGPIPE, SIG_IGN);
 	pthread_t threadid;
-	int sockfd;
+	int sd;
 	int bind_socket;
 	int status;
 	int client;
@@ -1040,10 +1103,10 @@ int main(){
 	struct sockaddr_in serv_addr;
 	
 	/* Create socket. */
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	sd = socket(AF_INET, SOCK_STREAM, 0);
 
 	/*Exit upon socket creation failure. */
-	if(sockfd == -1){
+	if(sd == -1){
 		fprintf(stderr, "ERROR: Could not open socket, please check connection.\n");
 		exit(1);
 	}
@@ -1055,7 +1118,7 @@ int main(){
 	socklen_t addrLen = sizeof(serv_addr);
 	
 	/* Bind sockaddr struct to socket. */
-	bind_socket = bind(sockfd, (struct sockaddr *) &serv_addr, addrLen);
+	bind_socket = bind(sd, (struct sockaddr *) &serv_addr, addrLen);
 
 	/*Exit if bind fails. */
 	if(bind_socket == -1){
@@ -1070,10 +1133,25 @@ int main(){
 	}
 	
 	/* Initialize errno. */
+	//errno = 0;
+
+	// lets setup the socket array
+	int i = 0;
+	int pp = PORT + 1;
 	errno = 0;
-	
+	for(i = 0;i < MAX_SOCKETS;i++){
+		socketL[i].port = pp;
+		socketL[i].client = getclients(&socketL[i],pp);
+		if(socketL[i].client == -1){
+			printf("Could not bind a stream.\n");
+			exit(1);
+		}
+		socketL[i].clientsocket = 0;
+		pp++;
+	}
+
 	/* Start listening. */
-	status = listen(sockfd, MAX_CLIENTS);
+	status = listen(sd, MAX_CLIENTS);
 
 	/* Return 0 if listen() fails. */
 	if(status == -1){
@@ -1085,7 +1163,7 @@ int main(){
 	
 	/* Wait indefinitely until a connection is accepted. */
 	while(1){
-		client = accept(sockfd, (struct sockaddr *)&serv_addr, &addrLen);
+		client = accept(sd, (struct sockaddr *)&serv_addr, &addrLen);
 		c = (int *)calloc(1, sizeof(int));
 		*c = client;
 		
