@@ -18,6 +18,99 @@
 
 unsigned int debug = 1;
 
+
+
+
+
+
+fileModePerms  mapFileModePerms(int fileMode, int flags) {
+
+	fileModePerms retVal;
+
+	switch(fileMode) {
+		case UNRESTRICTED:
+			switch (flags) {
+				case O_RDONLY:
+					retVal=U_R;
+					break;
+				case O_WRONLY:
+					retVal=U_W;
+					break;
+				case O_RDWR:
+					retVal=U_RW;
+					break;
+			}
+			break;
+		case EXCLUSIVE:
+			switch (flags) {
+				case O_RDONLY:
+					retVal=E_R;
+					break;
+				case O_WRONLY:
+					retVal=E_W;
+					break;
+				case O_RDWR:
+					retVal=E_RW;
+					break;
+			}
+			break;
+		case TRANSACTION:
+			switch (flags) {
+				case O_RDONLY:
+					retVal=T_R;
+					break;
+				case O_WRONLY:
+					retVal=T_W;
+					break;
+				case O_RDWR:
+					retVal=T_RW;
+					break;
+			}
+			break;
+	}
+	
+	return retVal;
+}
+
+int isFileModePermsOKtoOpen(fileModePerms fmp1, fileModePerms fmp2) {
+	if(debug){
+		printf("in fileModePerms, fmp1:[%d], fmp2:[%d]\n", fmp1, fmp2);
+	}
+	if ( ((fmp1 == U_R) || (fmp1 == E_R)) && (fmp2 <=5) ) {
+		// U_R is unrestricted_read
+		// E_R is exclusive_read
+		if (debug) {
+			printf("isFileModePermsOK: [%d][%d] -- OK\n",fmp1, fmp2);
+		}
+		return(1);
+
+	} else  if ( ((fmp1 == U_W) || (fmp1 == U_RW)) && (fmp2 <=3) ) {
+		// U_W is unrestricted_write
+		// E_R is unrestricted_readwrite
+		if (debug) {
+			printf("isFileModePermsOK: [%d][%d] -- OK2\n",fmp1, fmp2);
+		}
+		return(1);
+
+	} else  if ( ((fmp1 == E_W) || (fmp1 == E_RW)) &&
+			((fmp2 ==U_R) || (fmp2 ==E_R))
+		   ) {
+		// E_W is exclusive_write
+		// E_RW is exclusive_readwrite
+		if (debug) {
+			printf("isFileModePermsOK: [%d][%d] -- OK3\n",fmp1, fmp2);
+		}
+		return(1);
+	} else  {
+		if (debug) {
+			printf("isFileModePermsOK: [%d][%d] -- NOT OK\n",fmp1, fmp2);
+		}
+		return(0);
+	}
+
+	return 0;
+}
+
 // this will get a socket for a thread to use for Ext B
 int getclients(struct socketlist * s, int port){
 	int sd;
@@ -50,6 +143,7 @@ int getclients(struct socketlist * s, int port){
 
 // Worker helper method :)
 void * writeFileHelper2(void * s){
+
 	struct socketlist * sock = (struct socketlist *)s;
 	int sd = sock->client;
 	struct sockaddr_in serv_addr = sock->server;
@@ -97,6 +191,7 @@ void * writeFileHelper2(void * s){
 
 // Helper method for writing over 2k bytes.
 void writeFileHelper(int client,int filedes,size_t nbytes){
+	
 	int i = 0;
 	int bindable = 0;
 	int portsArr[MAX_SOCKETS];
@@ -177,8 +272,12 @@ void writeFileHelper(int client,int filedes,size_t nbytes){
 		}
 		writer += reader;
 	}
+
+
+	if(debug) printf("\n\n<<<<<<<<<< writehelp1, writer: %d>>>>>>>>>>>>>\n\n\n",writer);
 	// send bytes written
 	int readBytes = send(client, &writer, sizeof(writer),0);
+	if(debug) printf("\n\n<<<<<<<<<< writehelp1, writer: %d>>>>>>>>>>>>>\n\n\n",writer);
 	if(readBytes < 0){
 		printf("Sending error\n");
 		return;
@@ -192,19 +291,129 @@ void writeFileHelper(int client,int filedes,size_t nbytes){
 	return;
 }
 
+bool isitokToWrite(int fd, int *alreadyCaughtError){
+	struct clientlist * clptr;
+	struct filelist * flptr;
+	int fmp1, fmp2;
+	int nnode;
+	int isFileModePermsOK;
+	bool retBoolVal;
+
+	if(debug){
+		printf("isitokToReadWrite: fd=[%d] alreadyCaughtError=[%d]\n",
+				fd, *alreadyCaughtError);
+	}
+
+	retBoolVal = true;
+	fmp1=fmp2=-1;
+
+	flptr = fL;
+	clptr = flptr->list;
+
+	if(clptr == NULL){
+		errno = EBADF;
+		retBoolVal = false;
+	}
+	else{
+		while(flptr != NULL){
+			clptr = flptr->list;
+			while(clptr != NULL){
+				if(clptr->fd == fd){
+					fmp2 = clptr->fmp;
+					nnode = flptr->nnode;
+
+					if (debug) {
+						printf("1. isitokToReadWrite fmp2=[%d] nnode=[%d]\n", fmp2, nnode);
+					}
+
+					if ( (fmp2 != U_W) && (fmp2 != U_RW) &&
+							(fmp2 != E_W) && (fmp2 != E_RW) &&
+							(fmp2 != T_W) && (fmp2 != T_RW) ) {
+						*alreadyCaughtError=1;
+						errno = EACCES;
+						retBoolVal = false;
+					} 
+					break; 
+				}
+				clptr = clptr->next;
+			} // end clptr while
+			if((*alreadyCaughtError) == 1){
+				break;
+			}
+			else {
+				flptr = flptr->next;
+			}
+		} //end flptr while
+		
+		if( (retBoolVal) && (fmp2 != -1)){
+			flptr = fL;
+			while(flptr != NULL){
+				clptr = flptr->list;
+				if(flptr->nnode == nnode){
+					while(clptr != NULL){
+						if(clptr->fd == fd){
+							fmp1 = clptr->fmp;
+							isFileModePermsOK = isFileModePermsOKtoOpen(fmp1, fmp2);
+							if(isFileModePermsOK == 0){
+								*alreadyCaughtError = 1;
+								errno = PERMS_ERROR;
+								retBoolVal = false;
+								break;
+							}
+						}
+						clptr = clptr->next;
+					} // end clptr while
+				}
+				if((*alreadyCaughtError) == 1){
+					break;
+				}
+				else {
+					flptr = flptr->next;
+				}
+			} //end while
+		} //end retvalbool if
+	} //end else
+
+	return retBoolVal;
+}
+
+
 // Function to write file
 int writeFile(int client){
 	char * readBuffer;
 	int fd;
 	int error;
 	size_t nbytes;
-	int reader;
+	int reader, alreadyCaughtError;
 	// receive file descriptor
 	int recfd = 0;
+	struct filelist * flptr;
+	struct clientlist * clptr;
+
+	flptr = fL;
+
+	 
+	alreadyCaughtError = 0;	
 	while(recfd < sizeof(int)){
 		recfd += recv(client, &fd, sizeof(int), 0);
 		if(recfd == 0){
 			continue;
+		}
+	}
+	
+	if(debug) printf("In writeFile, fd: [%d]\n", fd);
+
+
+	if(flptr != NULL){
+		clptr = flptr->list;
+		if(clptr->next != NULL){
+		
+
+			if(!(isitokToWrite(fd, &alreadyCaughtError))){
+				if(debug) printf("Not Okay to Write :(\n");
+				errno = EBADF;
+				return -1;
+			}
 		}
 	}
 	// receive # of bytes to write
@@ -215,15 +424,19 @@ int writeFile(int client){
 			continue;
 		}
 	}
+	
+	if(debug) printf("\n\nIn writeFile, nbytes = %zd\n\n", nbytes);	
 
 	// if large bytes thread method
 	if(nbytes > 4096){
+		if(debug) printf("In nbytes > 4096, fd:[%d]\n", fd);
 		if(fd % 5 == 0){
 			fd /= -5;
 		} else{
 			reader = -1;
 			printf("DO LATER\n");
 		}
+		
 		writeFileHelper(client, fd,nbytes);
 		printf("Client %d done writing\n",client);
 		return 0;
@@ -432,7 +645,8 @@ int readFile(int client){
 	
 	// if large bytes thread method
 	if(nbytes > 4096){
-
+		if(debug) printf("\n\n\nIn readFile, inside 4096\n\n\n");
+ 
 		if(fd % 5 == 0){
 			fd /= -5;
 		} else{
@@ -485,7 +699,7 @@ int readFile(int client){
    Returns file descriptor on completion.
 
 */
-
+/*
 int addFileToList(struct filelist * ptr, int client, int mode, int flag){
 	
 	pthread_mutex_lock(&list);
@@ -525,7 +739,7 @@ int addFileToList(struct filelist * ptr, int client, int mode, int flag){
 	if(debug) printf("\n\nLeaving addfiletolist\n\n");
 	return fd;	
 }
-
+*/
 /*
    Given a node, find the nnode that contains node.
 
@@ -540,18 +754,17 @@ struct filelist * lookup_file(char * filename, int node){
 	struct filelist * curr = fL;
 	struct filelist * prev = curr;
 	pthread_mutex_lock(&list);
-	for(;curr != 0;curr = curr->next){
+	for(;curr != NULL;curr = curr->next){
 		if(curr->nnode == node){
 			pthread_mutex_unlock(&list);
+			if(debug) printf("Returning from lookup\n");
 			return curr;
 		}
 		prev = curr;
 	}
-	prev->next = calloc(1,sizeof(filelist));
-	prev = prev->next;
-	prev->filename = filename;
-	prev->nnode = node;
+	
 	pthread_mutex_unlock(&list);
+	if(debug) printf("Returning from lookup\n");
 	return prev;
 }
 
@@ -586,107 +799,202 @@ int is_file(const char * path){
 	return 1;
 }
 
-//extension A. Used to check transfer mode conflicts, and update queue/linked list
-int rw_conflict(char * filename, int mode, int flag, int client, int rd){
+
+void printcL(struct clientlist * clptr){
+	printf("------------------------ printcL ---------------------------\n");
+	while(clptr != NULL){
+		printf("client:[%d] mode:[%d] flag:[%d] fd:[%d] fmp:[%d]\n", 
+				clptr->client, clptr->mode, clptr->flag, clptr->fd, clptr->fmp);
+		clptr = clptr->next;
+	}
+}
+
+void printfL(){
+	struct filelist * flptr = fL;
+	printf("------------------------ printfL ---------------------------\n");
+	while(flptr != NULL){
+		printf("filename:[%s] nnode:[%d]\n", flptr->filename, flptr->nnode);
+		printcL(flptr->list);
+		flptr = flptr->next;
+	}
+}
+
+int rw_conflict(char * filename, int mode, int flag, int client){
+
 	
-	int mode0 = 0;
 	struct stat filestat; 
-	struct fdlist * curr = fdL;
-	struct fdlist * possible = 0;
-	struct filelist * ptr = 0;
+	struct filelist * flptr = NULL;
+	struct filelist * tempflptr = NULL;
+	struct clientlist * clptr = NULL;
+	struct clientlist * tempclptr = NULL;
+	fileModePerms fmp;
+	fileModePerms fmp1, fmp2;
 	stat (filename, &filestat);  
 	int nnode = filestat.st_ino;
-	int mode1 = 0;
 	int fd = 0;
-	int write1 = 0;
+	int retValOfisFileModePermsOK = 0;
 	pthread_mutex_lock(&lock);
-	if(fL == 0){
-		printf("Adding file to list\n");
-		fL = calloc(1,sizeof(filelist));
-		fL->filename = filename;
-		fL->nnode = nnode;
-	}
-	ptr = lookup_file(filename,nnode);
-
-	for(;curr != 0;curr = curr->next){
-		if(curr->next == 0){
-			possible = curr;
-		}
-		if(curr->nnode == nnode && curr->mode == 0){
-			write1 = 1;
-			mode0 = 1;
-			continue;
-		}
-		if(curr->nnode == nnode && curr->mode == 1 && curr->filemode == O_RDONLY){
-			mode1 = 1;
-			continue;
-		}
-		if(curr->nnode == nnode && curr->mode == 1 && curr->filemode != O_RDONLY){
-			write1 = 1;
-			mode1 = 1;
-			continue;
-		}
-
-		if(curr->nnode == nnode && curr->mode == 2){
-			if(rd == 0){
-				fd = addFileToList(ptr,client,mode,flag);
-				pthread_mutex_unlock(&lock);
-				return fd;
-			}
+	if(fL == NULL){
+		fd = open(filename, flag);
+		if(debug) printf("original f:[%d]\n", fd);
+		if(fd < 0){
+			printf("[%d] %s\n", errno, strerror(errno));
 			pthread_mutex_unlock(&lock);
 			return -1;
 		}
-	}
-	if((mode1 || mode0) && mode == 2){
-		if(rd == 0){
-			fd = addFileToList(ptr,client,mode,flag);
-			pthread_mutex_unlock(&lock);
-			return fd;
+		fd = fd * (-5);
+		printf("Adding file to filelist\n");
+		flptr = calloc(1,sizeof(filelist));
+		flptr->filename = filename;
+		flptr->nnode = nnode;
+		flptr->next = NULL;
+		fmp = mapFileModePerms(mode, flag);
+		clptr = calloc(1, sizeof(clientlist));
+		clptr->fd = fd;
+		clptr->fmp = fmp;
+		clptr->client = client;
+		clptr->mode = mode;
+		clptr->flag = flag;
+		clptr->next = NULL;
+		flptr->list = clptr;
+
+		//assign flptr to global fL 
+		fL = flptr;
+
+		if(debug){
+			printfL();
 		}
 		pthread_mutex_unlock(&lock);
-		return -1;
+		return fd;
 	}
-	curr = possible;
-	if(rd == 0){
-		if((mode1 == 0) || (mode1 == 1 && write1 == 1 && flag == O_RDONLY) || (mode1 == 1 && write1 == 0) || curr == 0){
-			errno = 0;
-			int o_flag = open(filename,flag) * -5;
-			if(errno != 0 || o_flag == -1){
+	else{
+		// 1. at this point check if the file has been opened by some other client
+		// 2. so we need to check the with which mode and file perms was the 
+		// file opened by the client. loop thru the client list for the nnode
+		retValOfisFileModePermsOK = 0;
+		flptr = fL;
+		clptr = NULL;
+		fmp2 = mapFileModePerms(mode, flag) ;       // the new client's fmp
+		while(flptr != NULL){
+			if(strcmp(flptr->filename, filename) == 0){
+				clptr = flptr->list;
+				while(clptr != NULL){
+
+					fmp1 = clptr->fmp;
+					retValOfisFileModePermsOK = isFileModePermsOKtoOpen(fmp1, fmp2);
+					if (retValOfisFileModePermsOK  == 0) {
+						// then  it implies that the file was opened by fmp1 for 
+						// exclsive write or exclsive read/write or transaction mode
+
+						break;       // out for while 
+					}
+					clptr = clptr->next;
+				} //clptr while
+				break;
+			} //strcmp filename
+
+			flptr = flptr->next;
+		} // end flptr while
+		
+		// At this point, if flptr is null => file has not been opened by anyone [yet].
+		if(flptr == NULL && retValOfisFileModePermsOK  == 0){
+
+			fd = open(filename, flag);
+			if(debug) printf("2. original fd:[%d]\n", fd);
+			if(fd < 0){
+				printf("[%d] %s\n", errno, strerror(errno));
 				pthread_mutex_unlock(&lock);
 				return -1;
 			}
-			if(curr == 0){
-				fdL = calloc(1,sizeof(fdlist));
-				possible = fdL;
-			} else{
-				possible->next = calloc(1,sizeof(fdlist));
-				possible = possible->next;
+			fd = fd * (-5);
+			printf("Adding file to filelist\n");
+			flptr = calloc(1,sizeof(filelist));
+			flptr->filename = filename;
+			flptr->nnode = nnode;
+			fmp = mapFileModePerms(mode, flag);
+			clptr = calloc(1, sizeof(clientlist));
+			clptr->fd = fd;
+			clptr->fmp = fmp;
+			clptr->client = client;
+			clptr->mode = mode;
+			clptr->flag = flag;
+			clptr->next = NULL;
+			flptr->list = clptr;
+
+			//assign flptr to global fL 
+			tempflptr = fL;
+			fL = flptr;
+			flptr->next = tempflptr;
+
+			if(debug){
+				printfL();
 			}
-			possible->filename = filename;
-			possible->nnode = nnode;
-			possible->mode = mode;
-			possible->filemode = flag;
-			pthread_mutex_unlock(&lock);
-			possible->fd = o_flag;
-			return possible->fd;
-		} else{
-			fd = addFileToList(ptr,client,mode,flag);
 			pthread_mutex_unlock(&lock);
 			return fd;
 		}
-	} else{
-		if((mode1 == 0) || (mode1 == 1 && write1 == 1 && flag == O_RDONLY) || (mode1 == 1 && write1 == 0) || curr == 0){
+
+		// 2. at this point if retValOfisFileModePermsOK  == 1 then
+		//    open the file and add it to the client list 
+		if ( retValOfisFileModePermsOK  == 1 ) {
+
+			fd = open(filename,flag);    
+
+			if (debug) {
+				printf("openFile:2.  open fileDescriptor is [%d] and  errno is set to [%d]\n",fd, errno);
+			}
+			if (fd == -1  ) {
+				if (debug) {
+					printf("openFile: fd is -1 and errno is :%d\n",errno);
+				}
+				pthread_mutex_unlock(&lock);
+				return(errno * -1);
+			}
+			// add the client file perms to  the list -- 
+			fd = fd * (-5);
+			if (debug) {
+				printf("openFile:3.  open fileDescriptor is [%d] and  errno is set to [%d]\n",fd, errno);
+			}
+			fmp = mapFileModePerms(mode, flag);
+			if(debug) printf("Before calloc.\n");
+			clptr = calloc(1, sizeof(clientlist));
+			if(debug) printf("After calloc.\n");
+			clptr->fd = fd;
+			clptr->fmp = fmp;
+			clptr->client = client;
+			clptr->mode = mode;
+			clptr->flag = flag;
+			if(debug) printf("clptr assignments suucess\n");
+			tempclptr = flptr->list;
+			flptr->list = clptr;
+			clptr->next = tempclptr;
+			if(debug) printf("Before printfL().\n");
+			if(debug){
+				printfL();
+			}
 			pthread_mutex_unlock(&lock);
-			return 0;
-		} else{
+
+			return fd;
+
+		} else if (retValOfisFileModePermsOK  == 0) {
+			errno = PERMS_ERROR;
+			if (debug) {
+				printf("openFile: fildes is -1 and errno is :%d\n",errno);
+			}
 			pthread_mutex_unlock(&lock);
-			return -1;
-		}
-	}
+			return(errno * -1);
+		} // retValOfisFileModePermsOK  == 1  or 0
+
+	}  // else
+
+
+	// at this point it's a valid fileDescriptor and as we have to send 
+	// over  a -ve fileDescriptor number
 	pthread_mutex_unlock(&lock);
-	return -1;
-	
+	errno = 0;
+	return (fd);
+
 }
+
 
 //attemps to open a file.
 int openFile(int client){
@@ -694,7 +1002,7 @@ int openFile(int client){
 	int flags;
 	int mode;
 	int error;
-	int isConflict;
+	//int isConflict;
 	int fd;
 	// receive connection mode (exclusive, transaction, etc)
 	int recmode = 0;
@@ -726,51 +1034,17 @@ int openFile(int client){
 	if(is_file(path)){
 		errno = 0;
 		pthread_mutex_lock(&conflict);
-		isConflict = rw_conflict(path,mode,flags, client,0);
+		fd = rw_conflict(path,mode,flags, client);
+		if(debug) printf("In openFile, fd:[%d]\n", fd);
 		pthread_mutex_unlock(&conflict);
 		if(errno != 0){
 			error = errno;
-			printf("[%d] %s\n",errno,strerror(errno));
 			fd = -1;
+			if(debug) printf("[%d] fd:[%d] %s\n",error, fd, strerror(errno));
 		}
-		if(isConflict > 0 && errno == 0){
-			while(1){
-				int pipe = 0;
-				printf("Conflict\n");
-				printf("PIPE: %d\n",isConflict);
-				read(isConflict,&pipe,sizeof(pipe));
-				
-				if(pipe == -1){
-					printf("TIMEOUT\n");
-					fd = -1;
-					errno = EWOULDBLOCK;
-					send(client, &fd, sizeof(fd), 0);
-					send(client, &errno, sizeof(errno), 0);
-					return errno;
-				}
-				printf("PP: %d\n",pipe);
-				pthread_mutex_lock(&conflict2);
-				isConflict = rw_conflict(path,mode,flags, client,0);
-				printf("BAD %d\n",isConflict);
-				pthread_mutex_unlock(&conflict2);
-				if(isConflict <= 0){
-					fd = isConflict;
-					break;
-				}
-			}
-			// permision denied fix
-		} else{
-			if(fd == -1){
-				error = errno;
-			} else{
-				fd = isConflict;
-			}
-		}
-	}else{
-		fd = -1;
-		error = errno;
+
 	}
-	printf("Flag: %d\nMode: %d\nFilename: %s\n",flags,mode,path);
+	if(debug) printf("Flag: %d\nMode: %d\nFilename: %s\n",flags,mode,path);
 	int retnBytes = send(client, &fd, sizeof(fd), 0);
 	int retError = send(client, &error, sizeof(error), 0);
 	if(retError == -1 || retnBytes == -1){
@@ -778,10 +1052,10 @@ int openFile(int client){
 		return -1;
 	}
 
-	return fd;
+	return 0;
 }
 
-
+/*
 // Deletes a node from the linked list when a file is closed.
 void deleteFileFromList(int pos){
 	struct fdlist * curr = fdL;
@@ -809,15 +1083,30 @@ void deleteFileFromList(int pos){
 	free(curr);
 	return;
 }
-
+*/
 // This is the close method. IT closes the file, or attemps to.
 int closeFile(int client){
-	int fd;
-	char * filename = 0;
+	int fd,origfd;
+        int nnode ; 
+	char * filename = NULL;
 	int error = 0;
 	int reader;
 
 	int recfd = 0;
+	int count = 0;
+	struct filelist * flptr = fL;
+	struct filelist * fl_curr;
+	struct filelist * fl_currtmp;
+	struct filelist * fl_prev;
+	struct clientlist * cl_curr;
+	struct clientlist * cl_currtmp;
+	struct clientlist * cl_prev;
+	struct clientlist * clptr;
+
+	origfd = 0;
+	fl_prev=NULL; 
+        nnode = -1;
+	if (fl_prev == NULL) {};
 	// receive fd to close
 	while(recfd < sizeof(int)){
 		recfd += recv(client, &fd, sizeof(int), 0);
@@ -825,67 +1114,191 @@ int closeFile(int client){
 			continue;
 		}
 	}
-	struct fdlist * curr = fdL;
-	for(;curr != NULL;curr = curr->next){
-		if(curr->fd == fd){
-			filename = curr->filename;
+	if(debug) printf("In netclose, fd:[%d]\n", fd);
+
+	while(flptr != NULL){
+	        if(debug) printf("IN flptr while loop [%s]\n",flptr->filename);
+		clptr = flptr->list;
+		while(clptr != NULL){
+	                if(debug) printf("IN clptr while loop [%d]\n",clptr->fd);
+			if(fd == clptr->fd){
+                                nnode = flptr->nnode;
+				break;
+			}
+			clptr = clptr->next;
 		}
+		
+		if(nnode != -1){
+			break;
+		}
+
+		flptr = flptr->next;
 	}
-	if(filename == 0){
-		printf("No file\n");
+	
+	if(debug) printf("After flptr while loop.  nnode = [%d]\n",nnode);
+	if(nnode == -1){
+		printf("No file...nnode is -1 at this point\n");
 		error = EBADF;
 		send(client, &error, sizeof(error), 0);
 		return -1;
 	}
+
 	//close FD and delete node. prob need mutex
 	if(fd % 5 == 0){
-		fd /= -5;
-		printf("FD: %d\n",fd);
-		reader = close(fd);
-		if(reader != -1){
-			int tempfd = fd * -5;
-			deleteFileFromList(tempfd);
-		}
+		origfd = fd/(-5);
+		if (debug) printf("FD: origfd=[%d] fd=[%d]\n",origfd, fd);
+		reader = close(origfd);
+		if (debug) printf("AFTER FD: origfd=[%d] fd=[%d]\n",origfd, fd);
 	} else{
 		reader = -1;
 	}
+	if (debug) printf("0-1 reader=[%d]\n",reader);
 	if(reader == -1){
 		error = errno;
 		if(error == 0){
 			error = -1;
 		}
 	} else{
+	       if (debug) printf("0-2 in else \n");
+
+                // nnode was captured from above from the list
+                /*
 		struct stat filestat; 
 		stat (filename, &filestat);  
 		int nnode = filestat.st_ino;
-		struct filelist * ptr = lookup_file(filename, nnode);
-		pthread_mutex_lock(&list);
-		struct clientlist * cl_curr = ptr->list;
-		struct clientlist * cl_prev = ptr->list;
-		if(cl_curr == 0){
-			printf("NO QUEUE\n");
+                */
+
+	       if (debug) printf("0-2 after stat  \n");
+		flptr = lookup_file(filename, nnode);
+	       if (debug) printf("0-3 after lookup  \n");
+		fl_prev = fl_curr = fL;
+		if(debug){
+			 printf("0-4 : before starting the cleanup\n");
+			 printfL();
+			 printf("0-4 : end start \n");
 		}
-		pthread_mutex_unlock(&list);
-		for(;cl_curr != NULL;cl_curr = cl_curr->next){
-			pthread_mutex_lock(&conflict);
-			int isConflict = rw_conflict(filename,cl_curr->mode,cl_curr->flag,0,1);
-			pthread_mutex_unlock(&conflict);
-			pthread_mutex_lock(&list);
-			if(isConflict == 0){
-				fd = (cl_curr->fd)[1];
-				printf("WRITING TO %d\n",fd);
-				write(fd,&isConflict,sizeof(isConflict));
-				if(ptr->list == cl_curr){
-					ptr->list = cl_curr->next;
-				} else{
-					cl_prev->next = cl_curr->next;
-				}
-				free(cl_curr);
-			}
-			pthread_mutex_unlock(&list);
-			cl_prev = cl_curr;
+
+                
+                // start of cleanup flptr->list 
+		cl_curr = cl_prev = flptr->list;
+		if(cl_curr == NULL){
+			printf("NO QUEUE of client list..so not cleanup required of client list\n");
 		}
-	}
+		if(debug)printf("Before cl_curr for loop\n");
+
+		while (cl_curr != NULL) {
+                    if (cl_curr->fd == fd){ 
+
+                        if (count == 0) {
+
+                            if ( (cl_curr == cl_prev) && (cl_curr->next == NULL)) {
+                                count = 1 ;
+                                flptr->list = NULL;
+                                cl_curr = NULL;
+                                break; 
+                            }  else {
+                                count = 1;
+                                flptr->list = cl_curr->next;
+                                cl_currtmp = cl_curr; 
+				cl_curr = cl_curr->next;
+                                free(cl_currtmp);
+                                break;
+                            }
+                            count = 1;
+                        } else if (count ==1 ){
+                            if (cl_curr->next == NULL) {
+                                cl_prev->next = NULL; 
+                                cl_currtmp = cl_curr; 
+                                free(cl_currtmp);
+                                break;
+                            } else {
+                                cl_prev->next = cl_curr->next;; 
+                                cl_currtmp = cl_curr; 
+                                free(cl_currtmp);
+                                break;
+                            }
+                           
+                        } // else of count is 1 and 0
+                    }  // end if of fd == clptr->fd
+
+                     
+                    cl_prev = cl_curr;
+                    cl_curr = cl_curr->next;
+                    count =1 ;
+                } // end while of cl_curr
+		
+		if(debug){
+			 printf("0-5 : after cleanup of the cl_curr\n");
+			 printfL();
+			 printf("0-5 : end cleanup  \n");
+		}
+		if(debug)printf("After cl_curr for loop\n");
+                //   ==================END OF CLEANUP flptr->list=============
+
+
+                // fl_prev and fl_curr has been init earlier
+		count = 0;
+		if(debug) printf("nnode: [%d]\n", nnode);
+		if(flptr->list == NULL){
+			if(debug)printf("Before fl_curr for loop\n");
+
+			while(fl_curr != NULL){
+                             //pthread_mutex_lock(&list);
+                             if (fl_curr->nnode == nnode){
+
+                                 if (count == 0) { 
+
+                                    if ( (fl_curr == fl_prev) && (fl_curr->next == NULL)) {
+                                        count = 1;
+                                        fL = NULL;                 // global variable fL
+                                        fl_curr = NULL;
+                                        break;
+                                    } else {
+                                       count = 1;
+                                       fL = fl_curr->next;        // global variable fL
+                                       fl_currtmp = fl_curr;
+                                       fl_curr = fl_curr->next;
+                                       free(fl_currtmp);
+                                       break;
+                                    }
+                                    count = 1;
+                                 }   else if (count == 1) {
+                                       if (fl_curr->next == NULL) {
+                                            fl_prev->next = NULL;
+                                            fl_currtmp = fl_curr;
+                                            free(fl_currtmp);
+                                            break;
+                                       } else {
+                                            fl_prev->next = fl_curr->next;;
+                                            fl_currtmp = fl_curr;
+                                            free(fl_currtmp);
+                                            break;
+                                      }
+                                 } // end else of count is 1 and 0
+
+                             }  // end of if condn of fl_curr->nnode = nnodecheck of 
+                            
+                             //pthread_mutex_unlock(&list);
+                             fl_prev = fl_curr;
+                             fl_curr = fl_curr->next;
+                             count = 1;
+ 
+                        } // end while of fl_curr !=null
+
+                        if(debug){
+                              printf("0-6 : after cleanup of the fl_curr\n");
+                              printfL();
+                              printf("0-6 : end fl_curr cleanup  \n");
+                        } 
+                        if(debug)printf("After fl_curr for loop\n");
+                        
+		} 
+		if(debug){
+			printfL();
+		}
+
+	} // end else 
+        
 	// send error
 	int retError = send(client, &error, sizeof(error), 0);
 	if(retError < 0){
@@ -932,6 +1345,11 @@ void * start(void * c){
 
 	close(client);
 	free(c);
+
+	if(debug){
+		printf("In start: End of Request \n");
+	}
+
 	return 0;
 }
 
@@ -1016,6 +1434,11 @@ int main(){
 		inet_ntop(AF_INET, &serv_addr.sin_addr, ipstr, sizeof(ipstr));
 		printf("Connection established with %s\n", ipstr);
 		pthread_create(&threadid, NULL, start, (void *)c);
+
+               if (debug ) {
+                   printf( "Worker thread completed work...back to waiting on accept\n");
+                }
+
 	}
 			
 	return 0;

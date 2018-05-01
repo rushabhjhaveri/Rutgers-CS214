@@ -1,25 +1,10 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<math.h>
-#include<ctype.h>
-#include<netdb.h>
-#include<pthread.h>
-#include<signal.h>
-#include<unistd.h>
-#include<errno.h>
-#include<sys/types.h>
-#include<netinet/in.h>
-#include<sys/socket.h>
-#include<arpa/inet.h>
 #include "libnetfiles.h"
-
 
 /*
    NO DEBUG: 0
    DEBUG: 1
 */
-unsigned int DEBUG = 1;
+unsigned int DEBUG = 0;
 
 
 //Return 0 if successful :)
@@ -177,7 +162,12 @@ int netopen(const char * pathname,int flags){
 	// If fd == -1, open failed; throw errno error.
 	if(fd == -1){
 		errno = error;
-		printf("[%d] %s\n",fd,strerror(errno));
+		if(errno == (-PERMS_ERROR)){
+			printf("[%d] MODE PERMISSION ERROR.\n", errno);		
+		}
+		else{
+			printf("[%d] %s\n",fd,strerror(errno));
+		}
 	}
 
 	// Close the socket connection.
@@ -346,6 +336,10 @@ ssize_t netread(int fildes, void *buf, size_t nbyte){
 		printf("[%d] %s\n",errno,strerror(errno));
 		exit(1);
 	}
+
+	 if (DEBUG) {
+           printf("in netread : cmd=[%d] fildes=[%d] \n",cmd,fildes);
+	 }
 	// Send command.
 	int sendtype = send(sd, &cmd, sizeof(sendtype), 0);
 	// Send fildes.
@@ -492,6 +486,8 @@ void * netwriteHelper(void * s){
 	size_t nbyte = msg->nbytes;
 	char * buffer = msg->buffer;
 	int error;
+
+	if(DEBUG) printf("=====writehelper, nbytes: %zd======\n",nbyte);
 	// send data
 	errno = 0;
 	int data = send(client, buffer, nbyte, 0);
@@ -639,6 +635,7 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte){
 		}
 		//receive bytes written
 		int recBytes = 0;
+		recMsg = 0;
 		while(recBytes < sizeof(recBytes)){
 			recBytes += recv(sd, &recMsg, sizeof(recMsg), 0);
 			if(recBytes == 0){
@@ -647,13 +644,15 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte){
 				return -1;
 			}
 		}
+
+		if(DEBUG) printf("=========== RECBYTES: %d,  RECMSG: %d =======\n", recBytes, recMsg);
 		if(recMsg < 0){
 			errno = -1*recMsg;
 			printf("[%d] %s\n",errno,strerror(errno));
 			return -1;
 		}
 		return recMsg;
-	}
+	} //4096 
 
 
 	// send data
@@ -698,6 +697,7 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte){
 		recMsg = -1;
 	}
 	close(sd);
+	if(DEBUG) printf("<<<<<<<<<<<<<<<<<<<<< recMsg: %d >>>>>>>>>>>>>>>>>>>>>\n", recMsg);
 	return recMsg;
 }
 
@@ -753,9 +753,10 @@ int netclose(int fildes){
 	}
 	return fd;
 }
+/*
 int main (){
 	char * hostname = "localhost";
-	netserverinit(hostname,1);
+	netserverinit(hostname,0);
 	
 	char * filename = "file.txt";
 	int fdd = netopen(filename,2);
@@ -769,7 +770,9 @@ int main (){
 	char * filename2 = "file2.txt";
 	int fdd2 = netopen(filename2,2);
 	
-	
+        char ans ;
+	printf("Press any key to continue \n");
+	scanf("%c", &ans);
 	char * txt = calloc(1,size);
 	printf("Read: %zd\n",netread(fdd,txt,size));
 	printf("Write: %zd\n",netwrite(fdd2,txt,size));
@@ -781,3 +784,5 @@ int main (){
 	
 	return 0;
 }
+
+*/
