@@ -208,5 +208,133 @@ The return pointer * retval must not be of local scope, otherwise, it would ceas
 
 
 ## Thread Synchronization ## 
+The thread library provides three synchronization mechanisms.  
+* mutexes - mutual exclusion lock: block access to variables by other threads; this enforces exclusive access by a thread to a variable or set of variables.  
 
+* joins - make a thread wait till others are complete [terminated].  
+
+* condition variables - data type pthread_cond_t.  
+
+### Mutexes ### 
+
+Mutexes are used to prevent data inconsistencies due to race conditions.  
+
+A race condition often occurs when two or more threads need to perform operations on the same memory area, but the results of computations depend on the order in which these operations are performed.  
+
+Mutexes are used for serializing shared resources.  
+
+In general, any time a global resource is accessed by more than one thread, the resource should have a mutex associated with it.  
+
+One can apply a mutex to protect a segment of memory, aka critical region, from other threads.  
+
+Mutexes can be applied only to threads in a single process, and do not work between processes, as semaphores do.  
+
+When a mutex lock is attempted against a mutex which is held by another thread, the thread is blocked until the mutex is unlocked.  
+
+When a thread terminates, the mutex does not, unless explicitly unlocked.  
+
+Nothing happens by default.  
+
+### Joins ### 
+
+A join is performed when one wants to wait for a thread to finish.  
+
+A thread-calling routine may launch multiple threads, then wait for them to finish to get the results.  
+
+One waits for the completion of the threads with a join.  
+
+### Condition Variables ### 
+
+A condition variable is a variable of type pthread_cond_t and is used with the appropriate functions for waiting and later, process continuation.  
+
+The condition variable mechanism allows threads to suspend execution and relinquish the processor until some condition is true.  
+
+A condition variable must always be associated with a mutex to avoid a race condition created by one thread preparing to wait and another thread, which may signal the condition before the first thread actually waits on it, resulting in a deadlock.  
+
+The thread would then be perpetually waiting for a signal that was never sent.  
+
+Any mutex can be used; there is no explicit link between the mutex and the condition variable.  
+
+__Functions used in conjunction with the condition variable__
+
+* Creating / Destroying 
+  * pthread_cond_init 
+  * pthread_cont_t cond = PTHREAD_COND_INITIALIZER 
+  * pthread_cond_destroy 
+
+* Waiting on condition 
+  * pthread_cond_wait 
+  * pthread_cond_timedwait - place limit on how long it will block. 
+
+* Working thread based on condition 
+  * pthread_cond_signal 
+  * pthread_cond_broadcast - wake up all threads blocked by the specified condition variable.  
+
+## Thread Scheduling ## 
+
+When thread scheduling is enabled, each thread may have its own scheduling properties. 
+
+Scheduling attributes may be specified: 
+* during thread creation 
+* dynamically, by changing the attributes of a thread already created.  
+* by defining the effect of a mutex on the thread's scheduling when creating a mutex 
+* by dynamically changing the scheduling of a thread during synchronization operations  
+
+The threads library provides default values, that are usually sufficient for most cases.  
+
+## Thread Pitfalls ## 
+
+### Race Conditions ### 
+
+While the code may appear on the screen in the order of desired execution, threads are scheduled by the OS and are executed at random.  
+
+It cannot be assumed that threads are executed in the order they are created.  
+
+Threads may also execute at different speeds.  
+
+When threads are executing [racing to complete], they may give unexpected results [race condition]. 
+
+Mutexes and joins must be utilized to achieve a predictable execution order and outcome.  
+
+### Thread-Safe Code ### 
+
+The threaded routines must call functions which are "thread-safe". 
+
+This means that there are no static or global variables over which other threads may clobber or read, assuming single-threaded operation.  
+
+If static or global variables are used, then mutexes must be applied, or the functions must be rewritten to avoid the use of these variables.  
+
+In C, local variables are dynamically allocated on the stack.  
+
+Therefore, any function that does not use static data or other shared resources is thread-safe.  
+
+Thread-unsafe functions may be used by only one thread at a time in a program, and the uniqueness of the thread must be ensured.  
+
+Many non-reentrant functions return a pointer to static data.  
+
+This can be avoided by returning dynamically allocated data or using caller-provided storage.  
+
+An example of a non-thread-safe function is strtok, which is also non-reentrant.  
+
+The thread-safe version is the reentrant version strtok_r.  
+
+### Mutex Deadlock ### 
+
+Mutex deadlock occurs when a mutex is applied, but then not "unlocked". 
+
+This causes program execution to halt indefinitely.  
+
+Mutex deadlock can also be caused by poor application of mutexes or joins.  
+
+One must be careful when applying two or more mutexes to a section of code.  
+
+If the first pthread_mutex_lock is applied, and the second pthread_mutex_lock fails due to another thread applying a mutex, the first mutex may eventually lock all other threads from accessing data, including the thread which holds the second mutex.  
+
+Threads may wait indefinitely for a resource to become free, causing a deadlock.  
+
+It is best to test, and if failure occurs, free the resources, and stall before retrying.  
+
+### Condition Variable Deadlock ### 
+
+The logic conditions [if and while statements] must be chosen to ensure that the "signal" is executed if the "wait" is ever processed.  
 
